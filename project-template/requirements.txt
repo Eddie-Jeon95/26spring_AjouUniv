@@ -1,0 +1,18 @@
+# 핵심 라이브러리 (버전은 == 로 고정 권장)
+numpy==1.26.4
+pandas==2.2.2
+scikit-learn==1.5.0
+matplotlib==3.9.0
+seaborn==0.13.2
+
+# 딥러닝 (필요 시 주석 해제)
+# torch==2.3.0
+# transformers==4.41.2
+
+# 배포
+streamlit==1.35.0
+
+# 유틸리티
+python-dotenv==1.0.1
+pyyaml==6.0.1
+tqdm==4.66.4

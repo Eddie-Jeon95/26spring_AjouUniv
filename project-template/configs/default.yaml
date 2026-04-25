@@ -1,0 +1,17 @@
+# 학습 기본 설정
+# 실험마다 복사해서 experiments/YYYYMMDD_실험명/config.yaml 로 관리하세요
+
+seed: 42
+
+data:
+  path: data/raw/dataset.csv
+  test_size: 0.2
+  val_size: 0.1
+  target_column: label
+
+model:
+  name: baseline
+  save_path: models/model.pkl
+  # 하이퍼파라미터는 아래에 추가
+  # learning_rate: 0.01
+  # max_depth: 5
