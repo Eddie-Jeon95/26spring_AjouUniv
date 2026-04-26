@@ -69,12 +69,6 @@ python scripts/train.py
 streamlit run streamlit_app.py
 ```
 
-### Docker로 실행
-
-```bash
-docker-compose up --build
-```
-
 ---
 
 ## 6. 배포

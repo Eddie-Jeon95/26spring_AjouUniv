@@ -157,25 +157,6 @@ model = model.to(device)
 
 ---
 
-## Docker
-
-**Q. Docker 컨테이너가 실행 안 돼요.**
-
-```bash
-# 로그 확인
-docker logs [컨테이너명]
-docker logs $(docker ps -lq)   # 가장 최근 컨테이너
-
-# 이미지 재빌드
-docker-compose down
-docker-compose up --build
-
-# 컨테이너 내부 접속해서 직접 확인
-docker exec -it [컨테이너명] /bin/bash
-```
-
----
-
 ## 기타
 
 **Q. 팀원 간 Python 버전이 달라서 문제가 생겨요.**

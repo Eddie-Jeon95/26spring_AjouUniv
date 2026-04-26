@@ -51,7 +51,7 @@ ML 실험 결과를 표준 형식으로 기록하기 위한 커맨드입니다.
 
 ## 재현 방법
 \`\`\`bash
-python src/models/train.py --config experiments/20260425_lgbm_baseline/config.yaml
+python scripts/train.py --config experiments/20260425_lgbm_baseline/config.yaml
 \`\`\`
 ```
 
