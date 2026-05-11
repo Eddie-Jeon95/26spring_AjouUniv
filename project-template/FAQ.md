@@ -6,7 +6,22 @@
 
 **Q. 데이터 파일이 아직 없는데 `train.py`를 실행해도 되나요?**
 
-네. 기본 설정에서는 `data/raw/dataset.csv`가 없으면 scikit-learn 샘플 데이터로 baseline 흐름을 확인합니다. 실제 프로젝트를 시작하면 `configs/default.yaml`의 `data.path`, `target_column`, `data_version`을 바꾸세요.
+네. 기본 설정에서는 `data/raw/dataset.csv`가 없으면 scikit-learn 샘플 데이터로 baseline 흐름을 확인합니다. 실제 프로젝트를 시작하면 raw 파일을 `data/raw/`에 두고, 전처리 후 `data/processed/` 파일을 만들어 학습하세요.
+
+학생이 YAML을 직접 수정하는 대신, 실제 프로젝트에서는 보통 아래처럼 실행합니다.
+
+```bash
+python scripts/preprocess.py \
+  --input data/raw/your_data.csv \
+  --output data/processed/your_data_v1.csv \
+  --target label \
+  --data-version your-data-v1
+
+python scripts/train.py \
+  --data data/processed/your_data_v1.csv \
+  --target label \
+  --data-version your-data-v1
+```
 
 ---
 

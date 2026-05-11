@@ -49,12 +49,14 @@ baseline은 다음 조건을 만족해야 합니다.
 
 ## 3. Config 관리
 
-`configs/default.yaml`은 항상 실행 가능한 기본값이어야 합니다.
+`configs/default.yaml`은 항상 실행 가능한 demo/default 예시여야 합니다.
+실제 프로젝트에서는 학생이 YAML을 직접 수정하기보다 `scripts/train.py`에 CLI 인자를 넘겨 실행합니다.
 
 실험이 늘어나면 다음 중 하나로 관리합니다.
 
-- 작은 프로젝트: `configs/default.yaml`을 복사해 `configs/<experiment>.yaml` 생성
-- 기록 중심: 실행된 config가 `experiments/runs/<run_id>/config.yaml`에 복사되는 것을 활용
+- 작은 프로젝트: `python scripts/train.py --data ... --target ... --data-version ...`로 실행
+- 기록 중심: 실행된 effective config가 `experiments/runs/<run_id>/config.yaml`에 저장되는 것을 활용
+- 심화 프로젝트: 필요하면 `configs/default.yaml`을 복사해 `configs/<experiment>.yaml` 생성
 - 심화 팀: MLflow나 DVC를 선택적으로 추가
 
 config에는 최소한 seed, data path, target column, data_version, model name, model params, primary metric이 있어야 합니다.

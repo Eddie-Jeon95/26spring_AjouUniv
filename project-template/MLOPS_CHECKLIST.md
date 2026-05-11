@@ -20,6 +20,7 @@
 - [ ] `docs/specs/DATA_ANALYSIS_SPEC.md`의 EDA 기준을 확인했는가?
 - [ ] `reports/DATA_CARD.md`에 데이터 출처, 수집 조건, 주요 컬럼을 기록했는가?
 - [ ] 결측치, 이상치, 중복, target 분포를 확인했는가?
+- [ ] EDA 결과를 바탕으로 `data/processed/`에 학습용 CSV를 만들었는가?
 - [ ] train/validation/test split 기준과 seed를 기록했는가?
 - [ ] `data_manifest.json`에 데이터 버전, checksum, row/column 수를 남겼는가?
 - [ ] 개인정보, 편향, 라벨 오류 가능성을 검토했는가?
@@ -71,7 +72,7 @@
 ## 7. 재현성과 버전 관리
 
 - [ ] `CLAUDE.md`의 Claude Code 작업 기준을 확인했는가?
-- [ ] `python scripts/train.py --config configs/default.yaml` 실행 흐름이 유지되는가?
+- [ ] `python scripts/train.py --data ... --target ... --data-version ...` 실행 흐름이 유지되는가?
 - [ ] seed, config, data_version, model_id가 실험마다 남는가?
 - [ ] 큰 데이터와 모델 파일은 Git에 올리지 않고 외부 링크나 경로만 기록했는가?
 - [ ] DVC/MLflow를 쓰지 않아도 기본 실험 추적이 가능한가?

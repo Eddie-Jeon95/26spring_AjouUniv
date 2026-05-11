@@ -3,9 +3,10 @@ Baseline 학습 및 실험 기록 스크립트.
 
 사용법:
     python scripts/train.py --config configs/default.yaml
+    python scripts/train.py --data data/processed/banknote_v1.csv --target label --data-version banknote-v1
 
 데이터 파일이 없으면 scikit-learn 샘플 데이터로 실행 흐름을 확인합니다.
-실제 프로젝트에서는 configs/default.yaml의 data.path와 target_column을 수정하세요.
+실제 프로젝트에서는 scripts/preprocess.py로 data/processed/ CSV를 만든 뒤 --data, --target, --data-version을 넘기세요.
 """
 
 from __future__ import annotations
@@ -16,7 +17,6 @@ import hashlib
 import json
 import pickle
 import random
-import shutil
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -44,6 +44,30 @@ def load_config(config_path: str) -> dict[str, Any]:
         return yaml.safe_load(f)
 
 
+def apply_cli_overrides(config: dict[str, Any], args: argparse.Namespace) -> dict[str, Any]:
+    """학생이 YAML 대신 CLI로 넘긴 값을 effective config에 반영한다."""
+    config = dict(config)
+    data_config = dict(config.get("data", {}))
+    tracking_config = dict(config.get("tracking", {}))
+
+    if args.data:
+        data_config["path"] = args.data
+        data_config["source"] = args.data
+        data_config["allow_demo_fallback"] = False
+    if args.target:
+        data_config["target_column"] = args.target
+    if args.data_version:
+        data_config["data_version"] = args.data_version
+    if args.experiment_name:
+        config["experiment_name"] = args.experiment_name
+    if args.primary_metric:
+        tracking_config["primary_metric"] = args.primary_metric
+
+    config["data"] = data_config
+    config["tracking"] = tracking_config
+    return config
+
+
 def stable_hash(payload: Any) -> str:
     """dict/list 설정을 짧은 해시로 변환한다."""
     text = json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str)
@@ -63,6 +87,7 @@ def load_dataset(data_config: dict[str, Any]) -> tuple[pd.DataFrame, str, dict[s
     """CSV 데이터가 있으면 사용하고, 없으면 demo 데이터를 반환한다."""
     data_path = Path(data_config.get("path", "data/raw/dataset.csv"))
     target_column = data_config.get("target_column", "label")
+    allow_demo_fallback = bool(data_config.get("allow_demo_fallback", True))
 
     if data_path.exists():
         df = pd.read_csv(data_path)
@@ -76,6 +101,12 @@ def load_dataset(data_config: dict[str, Any]) -> tuple[pd.DataFrame, str, dict[s
             "fallback_demo_data": False,
         }
         return df, target_column, metadata
+
+    if not allow_demo_fallback:
+        raise FileNotFoundError(
+            f"학습 데이터 파일을 찾을 수 없습니다: {data_path}\n"
+            "먼저 scripts/preprocess.py로 data/processed/ CSV를 만들거나 --data 경로를 확인하세요."
+        )
 
     demo = load_breast_cancer(as_frame=True)
     df = demo.frame.rename(columns={"target": target_column})
@@ -157,6 +188,12 @@ def write_json(path: Path, payload: Any) -> None:
     with open(path, "w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False, indent=2)
         f.write("\n")
+
+
+def write_yaml(path: Path, payload: Any) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        yaml.safe_dump(payload, f, allow_unicode=True, sort_keys=False)
 
 
 def read_json(path: Path, default: Any) -> Any:
@@ -246,8 +283,10 @@ def write_confusion_matrix(run_dir: Path, y_true: pd.Series, y_pred: np.ndarray)
     write_json(run_dir / "confusion_matrix.json", payload)
 
 
-def main(config_path: str) -> dict[str, Any]:
+def main(config_path: str, args: argparse.Namespace | None = None) -> dict[str, Any]:
     config = load_config(config_path)
+    if args is not None:
+        config = apply_cli_overrides(config, args)
     seed = int(config.get("seed", 42))
     set_seed(seed)
 
@@ -281,7 +320,7 @@ def main(config_path: str) -> dict[str, Any]:
     with open(artifact_path, "wb") as f:
         pickle.dump(model, f)
 
-    shutil.copy2(config_path, run_dir / "config.yaml")
+    write_yaml(run_dir / "config.yaml", config)
     write_json(run_dir / "metrics.json", metrics)
     write_predictions(run_dir, y_test, y_pred)
     write_confusion_matrix(run_dir, y_test, y_pred)
@@ -331,5 +370,13 @@ def main(config_path: str) -> dict[str, Any]:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=str, default="configs/default.yaml")
+    parser.add_argument("--data", type=str, default=None, help="학습용 processed CSV 경로")
+    parser.add_argument("--target", type=str, default=None, help="target column 이름")
+    parser.add_argument("--data-version", type=str, default=None, help="실험에 사용할 data_version")
+    parser.add_argument("--experiment-name", type=str, default=None, help="run_id에 들어갈 실험 이름")
+    parser.add_argument("--primary-metric", type=str, default=None, help="기록할 primary metric 이름")
     args = parser.parse_args()
-    main(args.config)
+    try:
+        main(args.config, args)
+    except (FileNotFoundError, ValueError) as exc:
+        parser.exit(1, f"error: {exc}\n")

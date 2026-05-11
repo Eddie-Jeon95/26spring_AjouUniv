@@ -23,6 +23,9 @@ project-template/        ← 학생들이 복사해서 사용하는 템플릿
 ├── README.md            ← 학생 프로젝트 시작점
 │
 ├── .claude/commands/    ← Claude Code 슬래시 커맨드
+│   ├── eda              ← raw 파일 기준 EDA 계획과 notebook 실행
+│   ├── preprocess-data  ← raw 데이터를 processed CSV로 정리
+│   ├── train-baseline   ← processed CSV로 baseline 학습
 │   ├── plan-experiment  ← 실험 전 가설과 비교 기준 정리
 │   ├── log-experiment   ← 실험 결과 표준 형식으로 기록
 │   ├── compare-models   ← 여러 모델/실험 결과 비교
@@ -32,6 +35,7 @@ project-template/        ← 학생들이 복사해서 사용하는 템플릿
 ├── notebooks/           ← EDA 템플릿
 ├── docs/specs/          ← 문제 정의, 데이터 분석, 모델링, 지표 해석 기준
 ├── reports/             ← 데이터 카드, 실험 리포트, 오류 분석, 모델 카드
+├── scripts/preprocess.py← raw 데이터를 processed CSV로 정리하는 진입점
 ├── scripts/train.py     ← baseline 학습과 실험 기록 진입점
 ├── streamlit_app.py     ← 실험 결과와 추론 로그 시각화 진입점
 ├── configs/             ← 실험 설정 파일
@@ -47,8 +51,9 @@ project-template/        ← 학생들이 복사해서 사용하는 템플릿
 |------|------|
 | 프로젝트 시작 | 템플릿 복사 → `project-template/README.md`의 처음 시작하는 순서 확인 |
 | 문제 정의 | `docs/specs/PROJECT_SPEC.md`에 입력/출력, metric, Streamlit 기준 작성 |
-| 데이터 분석 | `notebooks/01_eda_template.ipynb`로 EDA 수행 후 `reports/DATA_CARD.md` 작성 |
-| baseline 확인 | `python scripts/train.py --config configs/default.yaml` 실행 |
+| 데이터 분석 | `/eda data/raw/[파일명] target=[target]`로 EDA 계획과 notebook 실행 |
+| 전처리 | `/preprocess-data data/raw/[파일명] target=[target] output=data/processed/[버전].csv` |
+| baseline 확인 | `/train-baseline data/processed/[버전].csv target=[target] data_version=[버전]` |
 | 새 실험 전 | `/plan-experiment [실험 아이디어]` |
 | 실험 후 | `/log-experiment` |
 | 여러 실험 비교 | `/compare-models` |
@@ -74,7 +79,7 @@ project-template/        ← 학생들이 복사해서 사용하는 템플릿
 1. `project-template/` 폴더를 새 GitHub 레포로 복사
 2. `project-template/README.md`의 `0. 처음 시작하는 순서` 확인
 3. 가상환경 생성 후 의존성 설치
-4. `python scripts/train.py --config configs/default.yaml`로 baseline 흐름 확인
+4. raw 파일명을 Claude에게 알려 `/eda`, `/preprocess-data`, `/train-baseline` 순서로 진행
 5. `docs/specs/`, `reports/DATA_CARD.md`, `reports/EXPERIMENT_REPORT.md`를 프로젝트에 맞게 채우기
 
 ```bash
@@ -82,5 +87,5 @@ cd project-template
 python -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
-python scripts/train.py --config configs/default.yaml
+python scripts/train.py --config configs/default.yaml  # demo fallback 확인용
 ```

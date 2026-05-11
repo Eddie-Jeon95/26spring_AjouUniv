@@ -7,6 +7,9 @@
 - **출처 / 링크**:
 - **수집 기간 / 조건**:
 - **라이선스 / 사용 조건**:
+- **raw 파일 경로**:
+- **processed 파일 경로**:
+- **실행한 EDA notebook**:
 
 ## 2. 구조
 
@@ -21,11 +24,13 @@
 
 ## 3. EDA 핵심 발견
 
+- 확인한 주요 질문:
 - target 분포:
 - feature 분포:
 - 결측치 / 이상치:
 - 중복 데이터:
 - 눈에 띄는 패턴:
+- split 방식 추천:
 
 ## 4. 데이터 품질과 위험
 
@@ -34,14 +39,24 @@
 - 개인정보 / 민감정보:
 - 데이터 누수 의심 컬럼:
 
-## 5. Split과 버전 기록
+## 5. 전처리 결정
 
+- 적용한 전처리:
+- 제거한 컬럼:
+- rename / target mapping:
+- processed에 반영하지 않고 train pipeline에 남긴 변환:
+- 전처리 후 row / column 수:
+
+## 6. Split과 버전 기록
+
+- data_version:
 - train / validation / test 비율:
 - split seed:
-- checksum:
+- raw checksum:
+- processed checksum:
 - `data_manifest.json` 반영 여부:
 
-## 6. 다음 액션
+## 7. 다음 액션
 
 - [ ] 추가 확인할 EDA 질문
 - [ ] 정제하거나 제외할 컬럼
