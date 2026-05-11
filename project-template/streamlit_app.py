@@ -1,6 +1,11 @@
 """
 Streamlit 배포 진입점
 학생들이 이 파일을 채워서 배포합니다.
+
+최종 앱 목표:
+- model_registry.json 기반 모델 버전별 metric 추이
+- experiments/runs/<run_id>/confusion_matrix.json 기반 confusion matrix
+- logs/inference.jsonl 기반 요청 수, 에러율, 평균/P95 latency, 최근 로그
 """
 import streamlit as st
 

@@ -4,9 +4,10 @@
 
 ---
 
-`logs/inference.jsonl`의 내용을 분석해주세요.
+`logs/inference.jsonl`의 내용을 분석해주세요. Streamlit 대시보드는 이 로그와 `model_registry.json`, `experiments/runs/<run_id>/confusion_matrix.json`을 함께 보여주는 것을 목표로 합니다.
 
 ## 1단계: 로그 파일 읽기
+- `CLAUDE.md`와 `docs/specs/PROJECT_SPEC.md`에서 추론 로그와 개인정보 주의사항 확인
 - `logs/inference.jsonl` 파일을 읽고 전체 레코드 수 확인
 - 파일이 없거나 비어 있으면 로깅 코드가 연결되어 있는지 확인 후 알려주세요
 
@@ -43,8 +44,8 @@
 - (있다면 기술)
 ```
 
-## 5단계: CLAUDE.md 업데이트 제안
-발견한 이상 패턴이나 운영 팁이 있으면 CLAUDE.md 7번 섹션(알려진 함정)에 추가할 내용을 제안해주세요.
+## 5단계: 문서 업데이트 제안
+발견한 이상 패턴이나 운영 팁이 있으면 `CLAUDE.md` 또는 관련 `docs/specs/`에 추가할 내용을 제안해주세요.
 (직접 수정하지 말고 제안만)
 
 ---

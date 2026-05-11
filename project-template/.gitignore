@@ -26,6 +26,10 @@ data/processed/*
 *.ckpt
 /models/
 
+# 실험 실행 산출물
+experiments/runs/*
+!experiments/runs/.gitkeep
+
 # 운영 로그 (개인정보 및 용량 이슈)
 logs/*
 !logs/.gitkeep

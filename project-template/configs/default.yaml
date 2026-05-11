@@ -1,17 +1,28 @@
-# 학습 기본 설정
-# 실험마다 복사해서 experiments/YYYYMMDD_실험명/config.yaml 로 관리하세요
+# 기본 baseline 학습 설정
+# 데이터가 없으면 scikit-learn 샘플 데이터로 전체 흐름을 점검합니다.
 
 seed: 42
+experiment_name: baseline
 
 data:
   path: data/raw/dataset.csv
-  test_size: 0.2
-  val_size: 0.1
   target_column: label
+  data_version: demo-v0
+  source: "local CSV or sklearn demo fallback"
+  split:
+    test_size: 0.2
+    val_size: 0.1
+    stratify: true
 
 model:
-  name: baseline
-  save_path: models/model.pkl
-  # 하이퍼파라미터는 아래에 추가
-  # learning_rate: 0.01
-  # max_depth: 5
+  name: logistic_regression
+  task: classification
+  save_dir: models
+  params:
+    max_iter: 1000
+
+tracking:
+  runs_dir: experiments/runs
+  data_manifest_path: data_manifest.json
+  model_registry_path: model_registry.json
+  primary_metric: accuracy

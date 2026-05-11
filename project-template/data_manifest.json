@@ -1,0 +1,23 @@
+{
+  "datasets": [
+    {
+      "data_version": "demo-v0",
+      "source": "sklearn.datasets.load_breast_cancer",
+      "file_path": null,
+      "rows": 569,
+      "columns": 31,
+      "target_column": "label",
+      "split_seed": 42,
+      "split": {
+        "train_rows": 398,
+        "val_rows": 57,
+        "test_rows": 114,
+        "test_size": 0.2,
+        "val_size": 0.1,
+        "stratify": true
+      },
+      "checksum_sha256": "demo-data-loaded-at-runtime",
+      "notes": "템플릿 실행 확인용 샘플 데이터입니다. 실제 프로젝트에서는 데이터 출처와 checksum을 갱신하세요."
+    }
+  ]
+}

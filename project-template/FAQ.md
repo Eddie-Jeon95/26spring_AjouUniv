@@ -2,6 +2,42 @@
 
 ---
 
+## 데이터 / 모델 실험
+
+**Q. 데이터 파일이 아직 없는데 `train.py`를 실행해도 되나요?**
+
+네. 기본 설정에서는 `data/raw/dataset.csv`가 없으면 scikit-learn 샘플 데이터로 baseline 흐름을 확인합니다. 실제 프로젝트를 시작하면 `configs/default.yaml`의 `data.path`, `target_column`, `data_version`을 바꾸세요.
+
+---
+
+**Q. 실험 결과를 어디에 기록해야 하나요?**
+
+`python scripts/train.py --config configs/default.yaml`를 실행하면 다음이 생성됩니다.
+
+- `experiments/runs/<run_id>/config.yaml`
+- `experiments/runs/<run_id>/metrics.json`
+- `experiments/runs/<run_id>/predictions.csv`
+- `experiments/runs/<run_id>/confusion_matrix.json`
+- `experiments/runs/<run_id>/result.md`
+- `model_registry.json`의 새 모델 기록
+- `data_manifest.json`의 데이터 버전 기록
+
+실험 해석은 `/log-experiment` 커맨드와 `reports/EXPERIMENT_REPORT.md`를 함께 사용하세요. 실패한 실험도 반드시 기록하세요.
+
+---
+
+**Q. 데이터 버전 관리는 DVC를 꼭 써야 하나요?**
+
+아니요. 기본 템플릿은 `data_manifest.json`, `model_registry.json`, `experiments/runs/`만으로도 재현에 필요한 정보를 남기도록 설계했습니다. 데이터가 크거나 실험 수가 많아지면 DVC나 MLflow를 선택적으로 검토하세요.
+
+---
+
+**Q. 모델 파일은 어디에 두나요?**
+
+기본 학습 스크립트는 `models/`에 `.pkl` 파일을 저장합니다. 이 폴더는 `.gitignore`에 포함되어 있으므로 GitHub에는 올라가지 않습니다. 발표나 재현에 필요한 모델은 Google Drive, Hugging Face Hub 등 외부 링크를 `model_registry.json`에 기록하세요.
+
+---
+
 ## Git / GitHub
 
 **Q. Git conflict(충돌)이 났어요. 어떻게 해결하나요?**
@@ -92,6 +128,20 @@ Streamlit Cloud 로그 확인: 앱 페이지 우측 하단 "Manage app" → "Log
 
 ---
 
+**Q. Streamlit 말고 무료로 쓸 수 있는 대안도 있나요?**
+
+기본 템플릿은 Streamlit을 권장합니다. Python만으로 metric, confusion matrix, 추론 로그를 한 화면에 묶기 쉽기 때문입니다.
+
+심화 선택지는 다음 정도를 검토할 수 있습니다.
+
+- **Hugging Face Spaces + Gradio**: 모델 데모 UI에 적합
+- **MLflow**: 실험 metric과 artifact 추적에 적합
+- **Evidently**: 데이터/모델 모니터링과 drift 분석에 적합
+
+다만 수업 기본 요구사항은 Streamlit 기준으로 맞추고, 위 도구들은 필요할 때만 선택적으로 추가하세요.
+
+---
+
 **Q. 모델 파일(.pkl, .pt 등)을 GitHub에 올릴 수 없어요 (용량 초과).**
 
 HuggingFace Hub를 사용하세요:
@@ -163,6 +213,6 @@ model = model.to(device)
 
 `pyproject.toml`이나 `.python-version` 파일로 버전을 명시하거나, Docker를 사용하면 환경을 통일할 수 있습니다.
 
-**Q. 실험 결과를 어디에 기록해야 하나요?**
+**Q. GitHub PR을 꼭 써야 하나요?**
 
-`/log-experiment` 커맨드를 사용하면 `experiments/YYYYMMDD_실험명/result.md` 형식으로 자동 안내됩니다. 실패한 실험도 반드시 기록하세요 — 나중에 가장 귀한 자료가 됩니다.
+필수는 아닙니다. 이 템플릿에서는 PR 자체보다 데이터 분석, 모델링, 실험 근거, 버전 기록이 더 중요합니다. 다만 팀원이 동시에 작업한다면 branch와 PR을 쓰는 편이 충돌을 줄이는 데 도움이 됩니다.
