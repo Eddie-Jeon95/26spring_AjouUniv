@@ -15,13 +15,15 @@
 4. Claude에게 raw 파일명, target, 저장할 processed 파일명을 알려 전처리를 요청합니다.
    - 예: `/preprocess-data data/raw/banknote.txt target=label output=data/processed/banknote_v1.csv`
 5. Claude에게 processed 파일명과 target을 알려 baseline 학습을 요청합니다.
-   - 예: `/train-baseline data/processed/banknote_v1.csv target=label data_version=banknote-v1`
+   - 예: `/train-baseline data/processed/banknote_v1.csv target=label data_version=banknote-v1 test_size=0.2 val_size=0.2`
 6. 새 실험 전에는 `/plan-experiment [실험 아이디어]`로 가설과 비교 기준을 정합니다.
 7. 실험 후에는 `/log-experiment`, `/compare-models`, `/analyze-errors`로 결과와 한계를 기록합니다.
-8. 마지막에 `streamlit run streamlit_app.py`로 모델 버전별 metric, confusion matrix, 추론 로그를 확인합니다.
+8. 단계가 끝날 때마다 `/checkpoint [메시지]`로 문서/코드 변경을 검토하고 commit합니다.
+9. 마지막에 `/check-streamlit`으로 산출물 연결을 점검하고 앱 URL을 확인합니다.
 
 학생이 `configs/default.yaml`을 직접 수정하는 것이 기본 흐름은 아닙니다.
 파일명, target, data_version을 Claude Code 대화나 slash command 인자로 알려주면 Claude가 실행 명령을 맞춰줍니다.
+새로 추가한 slash command가 현재 Claude Code 세션에서 바로 보이지 않으면, 프로젝트 루트에서 새 세션을 열거나 해당 command 내용을 그대로 붙여 넣어 요청하세요.
 
 먼저 볼 기준 문서:
 
@@ -113,7 +115,9 @@ pip install -r requirements.txt
 python scripts/train.py \
   --data data/processed/banknote_v1.csv \
   --target label \
-  --data-version banknote-v1
+  --data-version banknote-v1 \
+  --test-size 0.2 \
+  --val-size 0.2
 ```
 
 데이터 파일이 아직 없으면 scikit-learn 샘플 데이터로 baseline 흐름을 확인합니다.
@@ -137,6 +141,12 @@ scaler, encoder, imputer처럼 train 데이터에 fit해야 하는 변환은 학
 
 ### 추론 / 앱 실행
 
+```text
+/check-streamlit
+```
+
+직접 실행할 때는 아래 명령을 사용합니다.
+
 ```bash
 streamlit run streamlit_app.py
 ```
@@ -151,6 +161,7 @@ streamlit run streamlit_app.py
 - **큰 파일 보관 위치**: [Google Drive / Hugging Face Hub / Kaggle / 기타 링크]
 
 큰 원본 데이터, 가공 데이터, 모델 가중치는 Git에 직접 올리지 않습니다.
+작업 단계가 끝나면 `/checkpoint [메시지]`로 `*.md`, 코드, `data_manifest.json`, `model_registry.json` 같은 가벼운 기록 파일만 검토 후 commit합니다.
 Claude Code와 협업할 때의 공통 기준은 `CLAUDE.md`를 확인합니다.
 
 ---

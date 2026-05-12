@@ -12,14 +12,15 @@
 - `docs/specs/METRICS_AND_INTERPRETATION_SPEC.md`에서 metric 해석 기준 확인
 - `model_registry.json`을 읽고 model_id, data_version, metric, artifact path를 확인
 - 각 run의 `confusion_matrix.json`이 있으면 주요 혼동 패턴도 확인
+- 각 run의 `config.yaml`에서 split, seed, target, feature 구성이 같은지 확인
 - 같은 data_version끼리 우선 비교
 - split이나 data_version이 다른 실험은 직접 비교가 어렵다고 표시
 
 ## 2단계: 비교 표 작성
 
-| model_id | data_version | 주요 metric | 보조 metric | 변경점 | 장점 | 한계 |
-|----------|--------------|-------------|-------------|--------|------|------|
-|          |              |             |             |        |      |      |
+| model_id | data_version | split/seed | 주요 metric | 보조 metric | 변경점 | 장점 | 한계 |
+|----------|--------------|------------|-------------|-------------|--------|------|------|
+|          |              |            |             |             |        |      |      |
 
 ## 3단계: 해석
 
@@ -44,4 +45,5 @@ metric 숫자 나열이 아니라, 왜 모델이 개선됐는지 설명하는 3~
 
 주의:
 - data_version이 다르면 그 차이를 반드시 언급하세요.
+- 같은 data_version이라도 split, seed, feature 구성이 다르면 직접 우열 비교를 보류하세요.
 - accuracy만 좋아지고 특정 class recall이 나빠진 경우 경고하세요.

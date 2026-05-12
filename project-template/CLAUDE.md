@@ -102,7 +102,9 @@ logs/                 # 추론 로그, Git 제외
 - 새 실험은 반드시 가설, 변경점, 비교 baseline, 성공/실패 기준을 가집니다.
 - config, metric, prediction sample, artifact path가 재현 가능하게 남아야 합니다.
 - 실제 프로젝트 baseline은 `python scripts/train.py --data ... --target ... --data-version ...` 형태의 CLI 인자를 우선 사용합니다.
+- Data Card의 split 추천을 맞출 때는 YAML을 수정하지 말고 `--test-size`, `--val-size`, `--no-stratify` CLI 인자를 우선 사용합니다.
 - 실행에 사용된 effective config는 각 run의 `experiments/runs/<run_id>/config.yaml`에 자동 저장합니다.
+- `predictions.csv`에 feature와 `original_index`가 있으면 오류 분석에 사용합니다. 없으면 feature 값을 추측하지 말고 config와 seed로 split을 재현하거나 한계를 명시합니다.
 - 실험별 `confusion_matrix.json`을 남겨 Streamlit에서 모델별 오류 패턴을 확인할 수 있어야 합니다.
 - 모델 파일은 `models/` 또는 외부 저장소에 두고 Git에 올리지 않습니다.
 
@@ -117,9 +119,10 @@ logs/                 # 추론 로그, Git 제외
 
 - Claude가 만든 코드는 학생이 실행하고 이해한 뒤 반영합니다.
 - API key, 개인정보, 민감한 원본 샘플은 프롬프트에 넣지 않습니다.
-- 새 라이브러리는 꼭 필요한 경우에만 제안하고 `requirements.txt`를 함께 갱신합니다.
+- 새 라이브러리는 꼭 필요한 경우에만 제안하고 `requirements.txt`를 함께 갱신합니다. 이미 `requirements.txt`에 있는 패키지는 `pip install -r requirements.txt`로 설치하도록 안내하고, 특정 패키지를 최신 버전으로 따로 설치하지 않습니다.
 - 큰 작업은 계획 → 구현 → 실행 확인 → 문서 갱신 순서로 진행합니다.
 - 결과가 좋아 보여도 data leakage, split 변경, metric 선택 문제를 먼저 점검합니다.
+- 중복, 누수, 오류 원인을 말할 때는 반올림된 출력이나 row 번호만 근거로 단정하지 않고 실제 파일에서 exact duplicate, feature-only duplicate, split 정보를 확인합니다.
 
 ---
 
@@ -130,11 +133,17 @@ logs/                 # 추론 로그, Git 제외
 | `/eda` | raw 파일 기준 EDA 계획과 notebook 실행 | `PROJECT_SPEC.md`, `DATA_ANALYSIS_SPEC.md` |
 | `/preprocess-data` | raw 파일을 processed CSV로 정리 | `DATA_CARD.md`, `DATA_ANALYSIS_SPEC.md` |
 | `/train-baseline` | processed CSV로 baseline 학습 | `MODELING_SPEC.md`, `EXPERIMENT_REPORT.md` |
+| `/check-streamlit` | Streamlit 실행 전 모델/run/log 연결 점검 | `PROJECT_SPEC.md`, `model_registry.json`, `experiments/runs/`, `streamlit_app.py` |
+| `/checkpoint` | 단계 완료 후 문서/코드 변경 checkpoint commit | `CLAUDE.md`, `.gitignore`, `git status` |
 | `/plan-experiment` | 새 feature/model 실험 전 | `CLAUDE.md`, `MODELING_SPEC.md`, `METRICS_AND_INTERPRETATION_SPEC.md` |
 | `/log-experiment` | 학습 실행 후 | `CLAUDE.md`, `MODELING_SPEC.md` |
 | `/compare-models` | 여러 run 비교 | `CLAUDE.md`, `METRICS_AND_INTERPRETATION_SPEC.md` |
 | `/analyze-errors` | 오답 원인 분석 | `DATA_ANALYSIS_SPEC.md`, `METRICS_AND_INTERPRETATION_SPEC.md` |
 | `/log-inference` | 데모/배포 후 로그 점검 | `CLAUDE.md`, `PROJECT_SPEC.md` |
+
+새 command 파일을 추가한 직후 현재 Claude Code 세션에서 `/command`가 인식되지 않을 수 있습니다.
+그 경우 프로젝트 루트에서 새 세션을 열거나 command 파일 내용을 붙여 넣어 동일한 요청으로 처리합니다.
+`/checkpoint`는 사용자 승인 전에는 `git add`나 `git commit`을 실행하지 않습니다.
 
 ---
 

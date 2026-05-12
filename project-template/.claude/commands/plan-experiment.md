@@ -47,7 +47,12 @@ $ARGUMENTS 실험을 계획하려고 합니다.
 
 ## 실행 명령
 ```bash
-python scripts/train.py --config configs/default.yaml
+python scripts/train.py \
+  --data data/processed/[file].csv \
+  --target [target] \
+  --data-version [version] \
+  --test-size [DATA_CARD 추천값] \
+  --val-size [DATA_CARD 추천값]
 ```
 
 ## 참조한 기준
@@ -66,3 +71,4 @@ python scripts/train.py --config configs/default.yaml
 주의:
 - metric 하나만 보지 말고 error analysis 계획을 함께 제안하세요.
 - 새로운 라이브러리는 꼭 필요한 경우에만 제안하세요.
+- 학생에게 YAML 수정을 기본 요구로 두지 말고, 가능한 실행 옵션은 CLI 인자로 표현하세요.

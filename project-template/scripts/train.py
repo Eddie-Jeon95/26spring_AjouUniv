@@ -4,6 +4,7 @@ Baseline 학습 및 실험 기록 스크립트.
 사용법:
     python scripts/train.py --config configs/default.yaml
     python scripts/train.py --data data/processed/banknote_v1.csv --target label --data-version banknote-v1
+    python scripts/train.py --data data/processed/banknote_v1.csv --target label --data-version banknote-v1 --val-size 0.2 --test-size 0.2
 
 데이터 파일이 없으면 scikit-learn 샘플 데이터로 실행 흐름을 확인합니다.
 실제 프로젝트에서는 scripts/preprocess.py로 data/processed/ CSV를 만든 뒤 --data, --target, --data-version을 넘기세요.
@@ -48,6 +49,7 @@ def apply_cli_overrides(config: dict[str, Any], args: argparse.Namespace) -> dic
     """학생이 YAML 대신 CLI로 넘긴 값을 effective config에 반영한다."""
     config = dict(config)
     data_config = dict(config.get("data", {}))
+    split_config = dict(data_config.get("split", {}))
     tracking_config = dict(config.get("tracking", {}))
 
     if args.data:
@@ -62,7 +64,14 @@ def apply_cli_overrides(config: dict[str, Any], args: argparse.Namespace) -> dic
         config["experiment_name"] = args.experiment_name
     if args.primary_metric:
         tracking_config["primary_metric"] = args.primary_metric
+    if args.test_size is not None:
+        split_config["test_size"] = args.test_size
+    if args.val_size is not None:
+        split_config["val_size"] = args.val_size
+    if args.no_stratify:
+        split_config["stratify"] = False
 
+    data_config["split"] = split_config
     config["data"] = data_config
     config["tracking"] = tracking_config
     return config
@@ -129,6 +138,12 @@ def split_dataset(
     test_size = float(split_config.get("test_size", 0.2))
     val_size = float(split_config.get("val_size", 0.1))
     stratify_enabled = bool(split_config.get("stratify", True))
+    if not 0 < test_size < 1:
+        raise ValueError("split.test_size는 0과 1 사이여야 합니다.")
+    if not 0 <= val_size < 1:
+        raise ValueError("split.val_size는 0 이상 1 미만이어야 합니다.")
+    if test_size + val_size >= 1:
+        raise ValueError("split.test_size + split.val_size는 1보다 작아야 합니다.")
 
     X = df.drop(columns=[target_column])
     y = df[target_column]
@@ -253,20 +268,42 @@ def write_result_markdown(run_dir: Path, record: dict[str, Any], metrics: dict[s
     (run_dir / "result.md").write_text("\n".join(lines), encoding="utf-8")
 
 
-def write_predictions(run_dir: Path, y_true: pd.Series, y_pred: np.ndarray) -> None:
-    """오류 분석을 위한 예측 샘플을 CSV로 저장한다."""
+def write_predictions(
+    run_dir: Path,
+    X_test: pd.DataFrame,
+    y_true: pd.Series,
+    y_pred: np.ndarray,
+    prediction_probability: np.ndarray | None = None,
+) -> None:
+    """오류 분석을 위한 예측 샘플과 입력 feature를 CSV로 저장한다."""
+    fieldnames = [
+        "row_number",
+        "original_index",
+        *[str(column) for column in X_test.columns],
+        "y_true",
+        "y_pred",
+        "is_correct",
+    ]
+    if prediction_probability is not None:
+        fieldnames.append("prediction_probability")
+
     with open(run_dir / "predictions.csv", "w", encoding="utf-8", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=["row_number", "y_true", "y_pred", "is_correct"])
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
-        for idx, (actual, pred) in enumerate(zip(y_true.tolist(), y_pred.tolist())):
-            writer.writerow(
-                {
-                    "row_number": idx,
-                    "y_true": actual,
-                    "y_pred": pred,
-                    "is_correct": actual == pred,
-                }
-            )
+        for row_number, (original_index, features) in enumerate(X_test.iterrows()):
+            actual = y_true.iloc[row_number]
+            pred = y_pred[row_number]
+            row = {
+                "row_number": row_number,
+                "original_index": original_index,
+                **{str(column): features[column] for column in X_test.columns},
+                "y_true": actual,
+                "y_pred": pred,
+                "is_correct": actual == pred,
+            }
+            if prediction_probability is not None:
+                row["prediction_probability"] = round(float(prediction_probability[row_number]), 6)
+            writer.writerow(row)
 
 
 def write_confusion_matrix(run_dir: Path, y_true: pd.Series, y_pred: np.ndarray) -> None:
@@ -303,6 +340,13 @@ def main(config_path: str, args: argparse.Namespace | None = None) -> dict[str, 
     model.fit(X_train, y_train)
     metrics = evaluate(model, X_test, y_test)
     y_pred = model.predict(X_test)
+    prediction_probability = None
+    if hasattr(model, "predict_proba"):
+        y_proba = model.predict_proba(X_test)
+        predicted_class_positions = [list(model.classes_).index(pred) for pred in y_pred]
+        prediction_probability = np.array(
+            [y_proba[row_index, class_index] for row_index, class_index in enumerate(predicted_class_positions)]
+        )
 
     now = datetime.now()
     config_hash = stable_hash(config)
@@ -322,7 +366,7 @@ def main(config_path: str, args: argparse.Namespace | None = None) -> dict[str, 
 
     write_yaml(run_dir / "config.yaml", config)
     write_json(run_dir / "metrics.json", metrics)
-    write_predictions(run_dir, y_test, y_pred)
+    write_predictions(run_dir, X_test, y_test, y_pred, prediction_probability)
     write_confusion_matrix(run_dir, y_test, y_pred)
 
     data_version = config.get("data", {}).get("data_version") or f"data-{config_hash}"
@@ -375,6 +419,9 @@ if __name__ == "__main__":
     parser.add_argument("--data-version", type=str, default=None, help="실험에 사용할 data_version")
     parser.add_argument("--experiment-name", type=str, default=None, help="run_id에 들어갈 실험 이름")
     parser.add_argument("--primary-metric", type=str, default=None, help="기록할 primary metric 이름")
+    parser.add_argument("--test-size", type=float, default=None, help="전체 데이터 중 test 비율")
+    parser.add_argument("--val-size", type=float, default=None, help="전체 데이터 중 validation 비율")
+    parser.add_argument("--no-stratify", action="store_true", help="stratified split을 끕니다")
     args = parser.parse_args()
     try:
         main(args.config, args)
