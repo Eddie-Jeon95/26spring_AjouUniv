@@ -1,3 +1,9 @@
+---
+description: "processed CSV로 baseline 학습을 계획, 실행, 기록하는 흐름을 안내합니다."
+argument-hint: "[processed_path] target=[target] data_version=[version] [test_size=0.2] [val_size=0.2]"
+disable-model-invocation: true
+---
+
 # /train-baseline
 
 processed CSV로 baseline 학습을 실행하기 전에 계획을 짧게 정리하고, 실행 후 결과를 `reports/EXPERIMENT_REPORT.md`에 이어서 정리하는 커맨드입니다.

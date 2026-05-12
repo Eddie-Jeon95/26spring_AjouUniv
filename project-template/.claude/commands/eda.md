@@ -1,3 +1,9 @@
+---
+description: "raw 데이터 기준 EDA 계획을 세우고 notebook 실행과 Data Card 요약을 돕습니다."
+argument-hint: "[raw_path] target=[target]"
+disable-model-invocation: true
+---
+
 # /eda
 
 raw 데이터 파일을 기준으로 EDA 계획을 짧게 세우고, notebook을 만들어 실행한 뒤 `reports/DATA_CARD.md`에 옮길 요약을 정리하는 커맨드입니다.

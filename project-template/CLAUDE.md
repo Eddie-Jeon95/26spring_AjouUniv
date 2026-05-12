@@ -26,13 +26,11 @@
 Claude Code로 작업을 시작할 때는 다음 순서로 컨텍스트를 잡습니다.
 
 1. `CLAUDE.md`: Claude Code 작업 기준과 폴더 규칙
-2. `docs/specs/README.md`: spec 문서 사용법
-3. `docs/specs/PROJECT_SPEC.md`: 문제 정의, 성공 기준, Streamlit 대시보드 기준
-4. `docs/specs/DATA_ANALYSIS_SPEC.md`: EDA와 데이터 품질 기준
-5. `docs/specs/MODELING_SPEC.md`: baseline과 실험 기록 기준
-6. `docs/specs/METRICS_AND_INTERPRETATION_SPEC.md`: metric 해석과 error analysis 기준
-7. `MLOPS_CHECKLIST.md`: 진행 중 자가 점검
-8. `AI_GUIDE.md`: Claude에게 분석/실험을 요청하는 방식
+2. `project-template/README.md`: 학생이 따라갈 전체 진행 순서
+3. `docs/specs/`: 문제 정의, 데이터 분석, 모델링, 지표 해석 기준
+4. `reports/`: 데이터 카드, 실험 리포트, 오류 분석, 모델 카드
+5. `MLOPS_CHECKLIST.md`: 진행 중 자가 점검
+6. `AI_GUIDE.md`: Claude에게 분석/실험을 요청하는 방식
 
 작업 요청이 애매하면 위 spec을 기준으로 부족한 정보를 먼저 확인하고, 추측으로 코드를 확장하지 않습니다.
 
@@ -147,60 +145,7 @@ logs/                 # 추론 로그, Git 제외
 
 ---
 
-## 6. Claude에게 요청할 때 포함할 정보
-
-```markdown
-## Goal
-[이번 작업의 목표]
-
-## Project Context
-- 문제 정의:
-- data_version:
-- baseline model_id:
-- 주요 metric:
-
-## Relevant Specs
-- CLAUDE.md
-- docs/specs/[관련 문서]
-
-## Task
-[구체적인 요청]
-
-## Expected Output
-- 변경/분석 요약
-- 확인한 기준
-- 실행 또는 검증 방법
-```
-
----
-
-## 7. 현재 진행 상황
-
-### 완료
-
-- [ ] 문제 정의
-- [ ] 데이터 확보
-- [ ] EDA와 데이터 카드 작성
-- [ ] 데이터 버전 기록
-- [ ] Baseline 모델
-- [ ] 실험 로그와 모델 registry 기록
-- [ ] Error analysis
-- [ ] 모델 개선 실험
-- [ ] Streamlit 실험/로그 대시보드
-- [ ] 최종 모델 카드
-- [ ] 발표 준비
-
-### 현재 작업 중
-
-- [채워주세요]
-
-### 다음 마일스톤
-
-- [채워주세요]
-
----
-
-## 8. 금지 사항
+## 6. 금지 사항
 
 - 데이터 파일, 모델 가중치, `.env`, Streamlit secrets를 Git에 추가하지 않습니다.
 - test set 성능을 반복적으로 보고 모델 선택에 사용하지 않습니다.

@@ -37,6 +37,9 @@ logs/*
 # Streamlit secrets
 .streamlit/secrets.toml
 
+# Claude Code local permissions
+.claude/settings.local.json
+
 # 환경 변수
 .env
 .env.local

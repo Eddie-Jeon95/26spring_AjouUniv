@@ -1,3 +1,9 @@
+---
+description: "여러 실험의 metric, split, data_version, trade-off를 비교합니다."
+argument-hint: "[data_version 선택사항]"
+disable-model-invocation: true
+---
+
 # /compare-models
 
 여러 실험의 성능과 trade-off를 비교하는 커맨드입니다.

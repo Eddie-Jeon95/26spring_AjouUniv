@@ -1,3 +1,9 @@
+---
+description: "새 실험을 시작하기 전에 가설, 비교 기준, 실패 조건을 정리합니다."
+argument-hint: "[실험 아이디어]"
+disable-model-invocation: true
+---
+
 # /plan-experiment
 
 새로운 ML 실험을 시작하기 전에 가설, 비교 기준, 실패 조건을 정리하는 커맨드입니다.

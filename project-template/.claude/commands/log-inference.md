@@ -1,3 +1,9 @@
+---
+description: "추론 로그를 읽어 요청 수, 에러율, latency, 이상 징후를 점검합니다."
+argument-hint: "[logs/inference.jsonl 선택사항]"
+disable-model-invocation: true
+---
+
 # /log-inference
 
 배포된 모델의 운영 로그를 분석하고 모니터링 상태를 점검하기 위한 커맨드입니다.

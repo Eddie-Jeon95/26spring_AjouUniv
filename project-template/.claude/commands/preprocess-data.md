@@ -1,3 +1,9 @@
+---
+description: "EDA 결과와 Data Card를 바탕으로 raw 데이터를 processed CSV로 정리합니다."
+argument-hint: "[raw_path] target=[target] output=[processed_path]"
+disable-model-invocation: true
+---
+
 # /preprocess-data
 
 EDA 결과와 Data Card를 참고해 raw 데이터를 학습용 processed CSV로 정리하는 커맨드입니다.

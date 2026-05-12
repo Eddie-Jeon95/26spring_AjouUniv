@@ -1,3 +1,9 @@
+---
+description: "최근 실험의 오류 유형을 분석하고 다음 개선 실험을 제안합니다."
+argument-hint: "[run_id 또는 model_id]"
+disable-model-invocation: true
+---
+
 # /analyze-errors
 
 모델의 실패 케이스를 분석하고 다음 개선 실험을 찾는 커맨드입니다.

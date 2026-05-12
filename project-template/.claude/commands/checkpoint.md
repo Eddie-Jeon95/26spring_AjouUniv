@@ -1,3 +1,9 @@
+---
+description: "단계 완료 후 변경 파일을 검토하고 사용자 승인 뒤 checkpoint commit을 만듭니다."
+argument-hint: "[commit message]"
+disable-model-invocation: true
+---
+
 # /checkpoint
 
 작업 단계가 끝났을 때 문서/코드 변경을 검토하고 checkpoint commit을 만드는 커맨드입니다.

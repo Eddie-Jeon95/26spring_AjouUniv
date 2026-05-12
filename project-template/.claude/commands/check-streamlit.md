@@ -1,3 +1,9 @@
+---
+description: "Streamlit 앱과 모델 registry, run artifact, 추론 로그 연결 상태를 점검합니다."
+argument-hint: "[port=8501 선택사항]"
+disable-model-invocation: true
+---
+
 # /check-streamlit
 
 Streamlit 앱 실행 전후 연결 상태를 점검하는 커맨드입니다.

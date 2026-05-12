@@ -1,3 +1,9 @@
+---
+description: "학습 실행 후 실험 결과를 표준 형식으로 기록하고 해석합니다."
+argument-hint: "[run_id 선택사항]"
+disable-model-invocation: true
+---
+
 # /log-experiment
 
 ML 실험 결과를 표준 형식으로 기록하고 해석하는 커맨드입니다.
