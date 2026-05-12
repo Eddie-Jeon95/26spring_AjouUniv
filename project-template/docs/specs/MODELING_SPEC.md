@@ -58,7 +58,7 @@ Data Card에서 정한 split을 맞출 때도 YAML을 고치기보다 `--test-si
 - 작은 프로젝트: `python scripts/train.py --data ... --target ... --data-version ... --test-size ... --val-size ...`로 실행
 - 기록 중심: 실행된 effective config가 `experiments/runs/<run_id>/config.yaml`에 저장되는 것을 활용
 - 심화 프로젝트: 필요하면 `configs/default.yaml`을 복사해 `configs/<experiment>.yaml` 생성
-- 심화 팀: MLflow나 DVC를 선택적으로 추가
+- 심화 프로젝트: MLflow나 DVC를 선택적으로 추가
 
 config에는 최소한 seed, data path, target column, data_version, model name, model params, primary metric이 있어야 합니다.
 

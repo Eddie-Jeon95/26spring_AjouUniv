@@ -8,7 +8,7 @@
 
 네. 기본 설정에서는 `data/raw/dataset.csv`가 없으면 scikit-learn 샘플 데이터로 baseline 흐름을 확인합니다. 실제 프로젝트를 시작하면 raw 파일을 `data/raw/`에 두고, 전처리 후 `data/processed/` 파일을 만들어 학습하세요.
 
-학생이 YAML을 직접 수정하는 대신, 실제 프로젝트에서는 보통 아래처럼 실행합니다.
+사용자가 YAML을 직접 수정하는 대신, 실제 프로젝트에서는 보통 아래처럼 실행합니다.
 
 ```bash
 python scripts/preprocess.py \
@@ -49,7 +49,7 @@ python scripts/train.py \
 
 **Q. 모델 파일은 어디에 두나요?**
 
-기본 학습 스크립트는 `models/`에 `.pkl` 파일을 저장합니다. 이 폴더는 `.gitignore`에 포함되어 있으므로 GitHub에는 올라가지 않습니다. 발표나 재현에 필요한 모델은 Google Drive, Hugging Face Hub 등 외부 링크를 `model_registry.json`에 기록하세요.
+기본 학습 스크립트는 `models/`에 `.pkl` 파일을 저장합니다. 이 폴더는 `.gitignore`에 포함되어 있으므로 GitHub에는 올라가지 않습니다. 데모나 재현에 필요한 모델은 Google Drive, Hugging Face Hub 등 외부 링크를 `model_registry.json`에 기록하세요.
 
 ---
 
@@ -67,7 +67,7 @@ git add 충돌파일명
 git rebase --continue
 ```
 
-팀원과 같은 파일을 동시에 수정했을 때 주로 발생합니다. 팀원과 직접 소통 후 해결하세요.
+같은 파일을 동시에 수정했을 때 주로 발생합니다. 충돌 표시가 남지 않도록 수정 후 다시 실행하거나 diff를 확인하세요.
 
 ---
 
@@ -84,6 +84,7 @@ echo ".streamlit/secrets.toml" >> .gitignore
 ```
 
 커밋 전 습관적으로 확인:
+
 ```bash
 grep -r "sk-" .          # OpenAI key 패턴
 grep -r "hf_" .          # HuggingFace token 패턴
@@ -106,6 +107,7 @@ pip install -r requirements.txt
 ```
 
 버전 충돌이 의심될 때:
+
 ```bash
 pip install pipreqs
 pipreqs . --force   # 실제 import 기반으로 requirements.txt 재생성
@@ -153,7 +155,7 @@ Streamlit Cloud 로그 확인: 앱 페이지 우측 하단 "Manage app" → "Log
 - **MLflow**: 실험 metric과 artifact 추적에 적합
 - **Evidently**: 데이터/모델 모니터링과 drift 분석에 적합
 
-다만 수업 기본 요구사항은 Streamlit 기준으로 맞추고, 위 도구들은 필요할 때만 선택적으로 추가하세요.
+다만 프로젝트 기본 흐름은 Streamlit 기준으로 맞추고, 위 도구들은 필요할 때만 선택적으로 추가하세요.
 
 ---
 
@@ -193,6 +195,7 @@ shutil.copy('/content/model.pkl', '/content/drive/MyDrive/model.pkl')
 ```
 
 또는 직접 다운로드:
+
 ```python
 from google.colab import files
 files.download('/content/model.pkl')
@@ -224,10 +227,6 @@ model = model.to(device)
 
 ## 기타
 
-**Q. 팀원 간 Python 버전이 달라서 문제가 생겨요.**
+**Q. Python 버전이 달라서 문제가 생겨요.**
 
 `pyproject.toml`이나 `.python-version` 파일로 버전을 명시하거나, Docker를 사용하면 환경을 통일할 수 있습니다.
-
-**Q. GitHub PR을 꼭 써야 하나요?**
-
-필수는 아닙니다. 이 템플릿에서는 PR 자체보다 데이터 분석, 모델링, 실험 근거, 버전 기록이 더 중요합니다. 다만 팀원이 동시에 작업한다면 branch와 PR을 쓰는 편이 충돌을 줄이는 데 도움이 됩니다.
