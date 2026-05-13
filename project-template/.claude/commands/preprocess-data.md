@@ -13,7 +13,7 @@ EDA 결과와 Data Card를 참고해 raw 데이터를 학습용 processed CSV로
 입력 인자 예시:
 
 ```text
-/preprocess-data data/raw/banknote.txt target=label output=data/processed/banknote_v1.csv
+/preprocess-data data/raw/[raw_file] target=[target] output=data/processed/[processed_file]
 ```
 
 $ARGUMENTS
@@ -53,13 +53,13 @@ $ARGUMENTS
 
 ```bash
 python scripts/preprocess.py \
-  --input data/raw/banknote.txt \
-  --output data/processed/banknote_v1.csv \
-  --target label \
+  --input data/raw/[raw_file] \
+  --output data/processed/[processed_file] \
+  --target [target] \
   --sep "," \
   --header none \
-  --columns variance,skewness,curtosis,entropy,label \
-  --data-version banknote-v1
+  --columns [columns] \
+  --data-version [data_version]
 ```
 
 지원되는 선택 인자:
@@ -77,7 +77,7 @@ python scripts/preprocess.py \
 - 다음 baseline 명령을 제안
 
 ```bash
-python scripts/train.py --data data/processed/banknote_v1.csv --target label --data-version banknote-v1
+python scripts/train.py --data data/processed/[processed_file] --target [target] --data-version [data_version]
 ```
 
 ---

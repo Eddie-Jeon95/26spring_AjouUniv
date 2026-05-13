@@ -3,8 +3,8 @@ Baseline 학습 및 실험 기록 스크립트.
 
 사용법:
     python scripts/train.py --config configs/default.yaml
-    python scripts/train.py --data data/processed/banknote_v1.csv --target label --data-version banknote-v1
-    python scripts/train.py --data data/processed/banknote_v1.csv --target label --data-version banknote-v1 --val-size 0.2 --test-size 0.2
+    python scripts/train.py --data data/processed/[processed_file] --target [target] --data-version [data_version]
+    python scripts/train.py --data data/processed/[processed_file] --target [target] --data-version [data_version] --val-size 0.2 --test-size 0.2
 
 데이터 파일이 없으면 scikit-learn 샘플 데이터로 실행 흐름을 확인합니다.
 실제 프로젝트에서는 scripts/preprocess.py로 data/processed/ CSV를 만든 뒤 --data, --target, --data-version을 넘기세요.
@@ -25,12 +25,15 @@ from typing import Any
 import numpy as np
 import pandas as pd
 import yaml
+from sklearn.compose import ColumnTransformer
 from sklearn.datasets import load_breast_cancer
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, f1_score
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
 
 def set_seed(seed: int = 42) -> None:
@@ -64,6 +67,30 @@ def apply_cli_overrides(config: dict[str, Any], args: argparse.Namespace) -> dic
         config["experiment_name"] = args.experiment_name
     if args.primary_metric:
         tracking_config["primary_metric"] = args.primary_metric
+    if args.model_name:
+        model_config = dict(config.get("model", {}))
+        if model_config.get("name") != args.model_name:
+            model_config["params"] = {}  # 다른 모델의 기본 params 오염 방지
+        model_config["name"] = args.model_name
+        config["model"] = model_config
+    if args.model_params:
+        model_config = dict(config.get("model", {}))
+        existing = dict(model_config.get("params", {}))
+        for pair in args.model_params.split(","):
+            pair = pair.strip()
+            if "=" not in pair:
+                continue
+            k, v = pair.split("=", 1)
+            k = k.strip()
+            try:
+                existing[k] = int(v)
+            except ValueError:
+                try:
+                    existing[k] = float(v)
+                except ValueError:
+                    existing[k] = None if v.strip() == "None" else v.strip()
+        model_config["params"] = existing
+        config["model"] = model_config
     if args.test_size is not None:
         split_config["test_size"] = args.test_size
     if args.val_size is not None:
@@ -170,31 +197,89 @@ def split_dataset(
     return X_train, X_val, X_test, y_train, y_val, y_test
 
 
-def build_model(model_config: dict[str, Any], seed: int) -> Pipeline:
-    """기본 baseline 모델을 생성한다."""
+def split_feature_columns(X: pd.DataFrame) -> tuple[list[str], list[str]]:
+    """mixed tabular baseline을 위한 numeric/categorical 컬럼을 나눈다."""
+    categorical_columns = X.select_dtypes(include=["object", "category", "bool"]).columns.tolist()
+    numeric_columns = [
+        column
+        for column in X.columns
+        if column not in categorical_columns and pd.api.types.is_numeric_dtype(X[column])
+    ]
+    categorical_columns.extend(
+        column for column in X.columns if column not in numeric_columns and column not in categorical_columns
+    )
+    return numeric_columns, categorical_columns
+
+
+_SUPPORTED_MODELS = ("logistic_regression", "random_forest")
+
+
+def build_preprocessor(
+    numeric_columns: list[str],
+    categorical_columns: list[str],
+    use_scaler: bool,
+) -> ColumnTransformer:
+    """numeric/categorical 컬럼에 맞는 ColumnTransformer를 반환한다."""
+    transformers: list[tuple[str, Pipeline, list[str]]] = []
+    if numeric_columns:
+        numeric_steps: list[tuple[str, Any]] = [("imputer", SimpleImputer(strategy="median"))]
+        if use_scaler:
+            numeric_steps.append(("scaler", StandardScaler()))
+        transformers.append(("numeric", Pipeline(steps=numeric_steps), numeric_columns))
+    if categorical_columns:
+        transformers.append((
+            "categorical",
+            Pipeline(steps=[
+                ("imputer", SimpleImputer(strategy="most_frequent")),
+                ("encoder", OneHotEncoder(handle_unknown="ignore", sparse_output=False)),
+            ]),
+            categorical_columns,
+        ))
+    if not transformers:
+        raise ValueError("학습에 사용할 feature column이 없습니다.")
+    return ColumnTransformer(transformers=transformers, remainder="drop")
+
+
+def build_model(model_config: dict[str, Any], seed: int, X_train: pd.DataFrame) -> Pipeline:
+    """tabular classification 모델 Pipeline을 생성한다.
+
+    지원 모델: logistic_regression, random_forest
+    """
     model_name = model_config.get("name", "logistic_regression")
     params = dict(model_config.get("params", {}))
 
-    if model_name != "logistic_regression":
-        raise ValueError("현재 템플릿 baseline은 logistic_regression만 제공합니다.")
+    if model_name not in _SUPPORTED_MODELS:
+        raise ValueError(
+            f"지원하지 않는 모델: '{model_name}'. 지원 목록: {_SUPPORTED_MODELS}"
+        )
 
-    params.setdefault("max_iter", 1000)
-    params.setdefault("random_state", seed)
-    return Pipeline(
-        steps=[
-            ("scaler", StandardScaler()),
-            ("model", LogisticRegression(**params)),
-        ]
-    )
+    numeric_columns, categorical_columns = split_feature_columns(X_train)
+
+    if model_name == "logistic_regression":
+        params.setdefault("max_iter", 1000)
+        params.setdefault("random_state", seed)
+        estimator: Any = LogisticRegression(**params)
+        use_scaler = True
+
+    elif model_name == "random_forest":
+        params.setdefault("random_state", seed)
+        # class_weight 값이 문자열 None이면 파이썬 None으로 변환
+        if params.get("class_weight") == "None":
+            params["class_weight"] = None
+        estimator = RandomForestClassifier(**params)
+        use_scaler = False  # 트리 계열은 feature scale에 무관
+
+    preprocessor = build_preprocessor(numeric_columns, categorical_columns, use_scaler)
+    return Pipeline(steps=[("preprocessor", preprocessor), ("model", estimator)])
 
 
-def evaluate(model: Pipeline, X_test: pd.DataFrame, y_test: pd.Series) -> dict[str, Any]:
+def evaluate(model: Pipeline, X_eval: pd.DataFrame, y_eval: pd.Series) -> dict[str, Any]:
     """classification baseline metric을 계산한다."""
-    y_pred = model.predict(X_test)
+    y_pred = model.predict(X_eval)
     return {
-        "accuracy": round(float(accuracy_score(y_test, y_pred)), 6),
-        "macro_f1": round(float(f1_score(y_test, y_pred, average="macro")), 6),
-        "classification_report": classification_report(y_test, y_pred, output_dict=True),
+        "accuracy": round(float(accuracy_score(y_eval, y_pred)), 6),
+        "macro_f1": round(float(f1_score(y_eval, y_pred, average="macro")), 6),
+        "classification_report": classification_report(y_eval, y_pred, output_dict=True),
     }
 
 
@@ -227,15 +312,12 @@ def append_model_registry(path: Path, record: dict[str, Any]) -> None:
     write_json(path, registry)
 
 
-def write_data_manifest(path: Path, record: dict[str, Any]) -> None:
-    """현재 학습에 사용한 데이터 버전을 기록한다."""
-    manifest = read_json(path, {"datasets": []})
-    datasets = manifest.setdefault("datasets", [])
-    datasets.append(record)
-    write_json(path, manifest)
-
-
-def write_result_markdown(run_dir: Path, record: dict[str, Any], metrics: dict[str, Any]) -> None:
+def write_result_markdown(
+    run_dir: Path,
+    record: dict[str, Any],
+    metrics: dict[str, Any],
+    test_metrics: dict[str, Any],
+) -> None:
     """실험 요약 Markdown을 저장한다."""
     lines = [
         f"# Experiment: {record['model_id']}",
@@ -247,7 +329,7 @@ def write_result_markdown(run_dir: Path, record: dict[str, Any], metrics: dict[s
         f"- Artifact: `{record['artifact_path']}`",
         f"- Confusion matrix: `{record['confusion_matrix_path']}`",
         "",
-        "## Metrics",
+        "## Validation Metrics",
         "",
         "| Metric | Value |",
         "|--------|-------|",
@@ -258,9 +340,21 @@ def write_result_markdown(run_dir: Path, record: dict[str, Any], metrics: dict[s
     lines.extend(
         [
             "",
+            "## Test Metrics",
+            "",
+            "| Metric | Value |",
+            "|--------|-------|",
+        ]
+    )
+    for metric_name in ("accuracy", "macro_f1"):
+        if metric_name in test_metrics:
+            lines.append(f"| {metric_name} | {test_metrics[metric_name]} |")
+    lines.extend(
+        [
+            "",
             "## Notes",
             "",
-            "- Baseline 실행 결과입니다. 실제 프로젝트에서는 가설, 변경점, 해석, 다음 액션을 추가하세요.",
+            "- Validation metric은 실험 비교 기준입니다. Test metric은 최종 확인용으로 해석하세요.",
             "- 자세한 비교는 `model_registry.json`과 `reports/EXPERIMENT_REPORT.md`에 정리하세요.",
             "",
         ]
@@ -270,7 +364,7 @@ def write_result_markdown(run_dir: Path, record: dict[str, Any], metrics: dict[s
 
 def write_predictions(
     run_dir: Path,
-    X_test: pd.DataFrame,
+    X_eval: pd.DataFrame,
     y_true: pd.Series,
     y_pred: np.ndarray,
     prediction_probability: np.ndarray | None = None,
@@ -279,7 +373,7 @@ def write_predictions(
     fieldnames = [
         "row_number",
         "original_index",
-        *[str(column) for column in X_test.columns],
+        *[str(column) for column in X_eval.columns],
         "y_true",
         "y_pred",
         "is_correct",
@@ -290,13 +384,13 @@ def write_predictions(
     with open(run_dir / "predictions.csv", "w", encoding="utf-8", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
-        for row_number, (original_index, features) in enumerate(X_test.iterrows()):
+        for row_number, (original_index, features) in enumerate(X_eval.iterrows()):
             actual = y_true.iloc[row_number]
             pred = y_pred[row_number]
             row = {
                 "row_number": row_number,
                 "original_index": original_index,
-                **{str(column): features[column] for column in X_test.columns},
+                **{str(column): features[column] for column in X_eval.columns},
                 "y_true": actual,
                 "y_pred": pred,
                 "is_correct": actual == pred,
@@ -336,13 +430,15 @@ def main(config_path: str, args: argparse.Namespace | None = None) -> dict[str, 
         split_config=split_config,
     )
 
-    model = build_model(config.get("model", {}), seed)
+    model = build_model(config.get("model", {}), seed, X_train)
     model.fit(X_train, y_train)
-    metrics = evaluate(model, X_test, y_test)
-    y_pred = model.predict(X_test)
+
+    metrics = evaluate(model, X_val, y_val)
+    test_metrics = evaluate(model, X_test, y_test)
+    y_pred = model.predict(X_val)
     prediction_probability = None
     if hasattr(model, "predict_proba"):
-        y_proba = model.predict_proba(X_test)
+        y_proba = model.predict_proba(X_val)
         predicted_class_positions = [list(model.classes_).index(pred) for pred in y_pred]
         prediction_probability = np.array(
             [y_proba[row_index, class_index] for row_index, class_index in enumerate(predicted_class_positions)]
@@ -366,8 +462,9 @@ def main(config_path: str, args: argparse.Namespace | None = None) -> dict[str, 
 
     write_yaml(run_dir / "config.yaml", config)
     write_json(run_dir / "metrics.json", metrics)
-    write_predictions(run_dir, X_test, y_test, y_pred, prediction_probability)
-    write_confusion_matrix(run_dir, y_test, y_pred)
+    write_json(run_dir / "test_metrics.json", test_metrics)
+    write_predictions(run_dir, X_val, y_val, y_pred, prediction_probability)
+    write_confusion_matrix(run_dir, y_val, y_pred)
 
     data_version = config.get("data", {}).get("data_version") or f"data-{config_hash}"
     data_record = {
@@ -396,18 +493,29 @@ def main(config_path: str, args: argparse.Namespace | None = None) -> dict[str, 
         "config_hash": config_hash,
         "primary_metric": primary_metric,
         "metrics": {k: v for k, v in metrics.items() if k != "classification_report"},
+        "test_metrics": {k: v for k, v in test_metrics.items() if k != "classification_report"},
         "artifact_path": str(artifact_path),
         "experiment_path": str(run_dir),
         "confusion_matrix_path": str(run_dir / "confusion_matrix.json"),
-        "limitations": "Baseline only. 실제 프로젝트 데이터와 error analysis로 한계를 갱신하세요.",
+        "limitations": "Baseline only. Validation metrics are for experiment comparison; test metrics are final-check context.",
     }
 
     write_json(run_dir / "data_manifest_entry.json", data_record)
-    write_result_markdown(run_dir, model_record, metrics)
-    write_data_manifest(Path(tracking_config.get("data_manifest_path", "data_manifest.json")), data_record)
+    write_result_markdown(run_dir, model_record, metrics, test_metrics)
     append_model_registry(Path(tracking_config.get("model_registry_path", "model_registry.json")), model_record)
 
-    print(json.dumps({"run_id": run_id, "metrics": model_record["metrics"], "run_dir": str(run_dir)}, ensure_ascii=False, indent=2))
+    print(
+        json.dumps(
+            {
+                "run_id": run_id,
+                "metrics": model_record["metrics"],
+                "test_metrics": model_record["test_metrics"],
+                "run_dir": str(run_dir),
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
     return model_record
 
 
@@ -422,6 +530,10 @@ if __name__ == "__main__":
     parser.add_argument("--test-size", type=float, default=None, help="전체 데이터 중 test 비율")
     parser.add_argument("--val-size", type=float, default=None, help="전체 데이터 중 validation 비율")
     parser.add_argument("--no-stratify", action="store_true", help="stratified split을 끕니다")
+    parser.add_argument("--model-name", type=str, default=None,
+                        help=f"사용할 모델 이름. 지원: {_SUPPORTED_MODELS}")
+    parser.add_argument("--model-params", type=str, default=None,
+                        help="모델 하이퍼파라미터. 예: n_estimators=100,max_depth=5")
     args = parser.parse_args()
     try:
         main(args.config, args)

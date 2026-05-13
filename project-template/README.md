@@ -10,12 +10,12 @@
 
 1. `docs/specs/PROJECT_SPEC.md`에 문제 정의, 입력/출력, 주요 metric, Streamlit 최종 화면 기준을 간단히 적습니다.
 2. 원본 데이터를 `data/raw/`에 넣고 Claude에게 파일명과 target 후보를 알려 EDA를 요청합니다.
-   - 예: `/eda data/raw/banknote.txt target=label`
+   - 예: `/eda data/raw/[raw_file] target=[target]`
 3. EDA notebook 결과를 보고 `reports/DATA_CARD.md`에 데이터 품질과 전처리 결정을 정리합니다.
 4. raw 파일명, target, 저장할 processed 파일명을 알려 전처리를 요청합니다.
-   - 예: `/preprocess-data data/raw/banknote.txt target=label output=data/processed/banknote_v1.csv`
+   - 예: `/preprocess-data data/raw/[raw_file] target=[target] output=data/processed/[processed_file]`
 5. processed 파일명과 target을 알려 baseline 학습을 요청합니다.
-   - 예: `/train-baseline data/processed/banknote_v1.csv target=label data_version=banknote-v1 test_size=0.2 val_size=0.2`
+   - 예: `/train-baseline data/processed/[processed_file] target=[target] data_version=[data_version] test_size=0.2 val_size=0.2`
 6. 새 실험 전에는 `/plan-experiment [실험 아이디어]`로 가설과 비교 기준을 정합니다.
 7. 실험 후에는 `/log-experiment`, `/compare-models`, `/analyze-errors`로 결과와 한계를 기록합니다.
 8. 단계가 끝날 때마다 `/checkpoint [메시지]`로 문서/코드 변경을 검토하고 commit합니다.
@@ -121,22 +121,22 @@ pip install -r requirements.txt
 
 ```bash
 python scripts/preprocess.py \
-  --input data/raw/banknote.txt \
-  --output data/processed/banknote_v1.csv \
-  --target label \
+  --input data/raw/[raw_file] \
+  --output data/processed/[processed_file] \
+  --target [target] \
   --sep "," \
   --header none \
-  --columns variance,skewness,curtosis,entropy,label \
-  --data-version banknote-v1
+  --columns [columns] \
+  --data-version [data_version]
 ```
 
 ### 학습
 
 ```bash
 python scripts/train.py \
-  --data data/processed/banknote_v1.csv \
-  --target label \
-  --data-version banknote-v1 \
+  --data data/processed/[processed_file] \
+  --target [target] \
+  --data-version [data_version] \
   --test-size 0.2 \
   --val-size 0.2
 ```

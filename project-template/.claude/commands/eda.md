@@ -13,7 +13,7 @@ raw 데이터 파일을 기준으로 EDA 계획을 짧게 세우고, notebook을
 입력 인자 예시:
 
 ```text
-/eda data/raw/banknote.txt target=label
+/eda data/raw/[raw_file] target=[target]
 ```
 
 $ARGUMENTS
@@ -24,6 +24,9 @@ $ARGUMENTS
 - `docs/specs/PROJECT_SPEC.md`의 문제 정의와 target 후보 확인
 - `docs/specs/DATA_ANALYSIS_SPEC.md`의 EDA 기준 확인
 - 인자로 받은 raw 파일 경로가 존재하는지 확인
+- raw 파일이 없으면 여기서 즉시 중단하고 notebook을 만들지 않습니다.
+  - 예제 데이터(seaborn/sklearn/Kaggle sample 등)를 자동 생성하거나 다운로드하지 않습니다.
+  - 대신 `data/raw/`에 파일을 넣기, 경로 재확인, `target=...` 재지정을 다음 액션으로 안내합니다.
 - `target=...`이 있으면 우선 사용하고, 없거나 불확실하면 target 후보를 질문
 - header가 없는 파일이면 컬럼명 후보를 질문하거나 데이터 첫 줄을 보고 임시 컬럼명을 제안
 
@@ -81,4 +84,5 @@ $ARGUMENTS
 주의:
 - 개인정보나 민감한 원본 샘플을 그대로 출력하지 마세요.
 - EDA는 그래프 수보다 “그래프에서 무엇을 판단했는가”를 우선합니다.
+- raw 파일이 없을 때는 대체 데이터로 진행하지 마세요. 데이터 출처와 기록이 오염됩니다.
 - `DATA_CARD.md`를 직접 수정했다면 어떤 섹션을 바꿨는지 마지막에 알려주세요.

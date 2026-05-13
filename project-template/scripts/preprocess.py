@@ -3,13 +3,13 @@ Raw 데이터를 학습용 processed CSV로 정리하는 스크립트.
 
 사용 예시:
     python scripts/preprocess.py \
-      --input data/raw/banknote.txt \
-      --output data/processed/banknote_v1.csv \
-      --target label \
+      --input data/raw/[raw_file] \
+      --output data/processed/[processed_file] \
+      --target [target] \
       --sep "," \
       --header none \
-      --columns variance,skewness,curtosis,entropy,label \
-      --data-version banknote-v1
+      --columns [columns] \
+      --data-version [data_version]
 """
 
 from __future__ import annotations
@@ -125,11 +125,16 @@ def preprocess(args: argparse.Namespace) -> dict[str, Any]:
     if target_map:
         df[target_column] = df[target_column].astype(str).replace(target_map)
 
+    if args.drop_duplicate_rows and args.keep_duplicate_rows:
+        raise ValueError("--drop-duplicate-rows와 --keep-duplicate-rows는 함께 사용할 수 없습니다.")
+
     duplicate_rows_removed = 0
-    if not args.keep_duplicate_rows:
+    duplicate_policy = "kept"
+    if args.drop_duplicate_rows:
         before = len(df)
         df = df.drop_duplicates()
         duplicate_rows_removed = before - len(df)
+        duplicate_policy = "dropped_exact_rows"
 
     target_missing_rows_removed = 0
     if not args.keep_rows_missing_target:
@@ -161,6 +166,7 @@ def preprocess(args: argparse.Namespace) -> dict[str, Any]:
             "rename": rename_map,
             "drop_columns": drop_columns,
             "target_map": target_map,
+            "duplicate_policy": duplicate_policy,
             "duplicate_rows_removed": int(duplicate_rows_removed),
             "target_missing_rows_removed": int(target_missing_rows_removed),
             "fit_based_transforms": "Not applied here. Keep scaler/encoder/imputer inside train pipeline.",
@@ -183,7 +189,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--drop-columns", default=None, help="제거할 컬럼 목록: col1,col2")
     parser.add_argument("--rename", default=None, help="컬럼명 변경: old=new,old2=new2")
     parser.add_argument("--target-map", default=None, help="target 값 mapping: old=new,old2=new2")
-    parser.add_argument("--keep-duplicate-rows", action="store_true", help="중복 row를 제거하지 않음")
+    parser.add_argument("--drop-duplicate-rows", action="store_true", help="exact duplicate row를 제거함")
+    parser.add_argument(
+        "--keep-duplicate-rows",
+        action="store_true",
+        help="호환용 옵션입니다. 기본 동작이 중복 row 보존입니다.",
+    )
     parser.add_argument("--keep-rows-missing-target", action="store_true", help="target 결측 row를 제거하지 않음")
     parser.add_argument("--manifest", default="data_manifest.json", help="갱신할 data manifest 경로")
     parser.add_argument("--source", default=None, help="데이터 출처 메모")

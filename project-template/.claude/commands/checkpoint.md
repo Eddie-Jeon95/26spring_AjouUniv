@@ -15,7 +15,7 @@ MD가 계속 바뀌어 추적이 어려워지는 문제를 줄이되, 검토 전
 
 ```text
 /checkpoint EDA와 Data Card 초안 기록
-/checkpoint entropy 제거 실험 결과 기록
+/checkpoint [실험 요약]
 ```
 
 $ARGUMENTS

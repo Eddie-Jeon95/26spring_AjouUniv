@@ -38,6 +38,7 @@ $ARGUMENTS
   - `data_version`
   - `primary_metric`
   - `metrics`
+  - `test_metrics`
   - `artifact_path`
   - `experiment_path`
   - `confusion_matrix_path`
@@ -50,8 +51,9 @@ $ARGUMENTS
 최신 record를 기본으로 보되, 가능하면 모든 record에 대해 확인합니다.
 
 - `artifact_path`의 `.pkl` 모델 파일 존재 여부
-- `experiment_path/metrics.json` 존재 여부
-- `confusion_matrix_path` 존재 여부
+- `experiment_path/metrics.json` 존재 여부 (validation metric)
+- `experiment_path/test_metrics.json` 존재 여부 (test metric)
+- `confusion_matrix_path` 존재 여부 (validation confusion matrix)
 - metric 값이 `model_registry.json`과 `metrics.json`에서 일관적인지 확인
 - 모델 파일이 없으면 재학습 또는 artifact 경로 확인을 안내
 
@@ -103,8 +105,9 @@ streamlit run streamlit_app.py --server.port 8502
 앱에서 확인할 항목:
 
 - sidebar에서 모델/run 선택 가능 여부
-- Predict 탭에서 feature 4개 입력 후 예측 가능 여부
-- 예측 결과에 class label과 위조 확률이 표시되는지
+- Predict 탭에서 선택한 run의 feature 입력 폼이 생성되는지
+- numeric feature는 median 기반 기본값, categorical feature는 선택지가 표시되는지
+- 예측 결과에 class label과 class별 probability가 표시되는지
 - Experiments 탭에서 metric 표와 confusion matrix가 보이는지
 - Logs 탭에서 로그가 없을 때 빈 상태 안내가 보이는지
 - Predict를 1회 실행한 뒤 `logs/inference.jsonl`이 생성되는지
