@@ -9,9 +9,11 @@ Generic tabular model Streamlit app.
 from __future__ import annotations
 
 import json
+import html
 import pickle
 import re
 import sys
+import textwrap
 import time
 from pathlib import Path
 from typing import Any
@@ -19,6 +21,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 import streamlit as st
+import streamlit.components.v1 as components
 import yaml
 
 
@@ -783,6 +786,15 @@ def autogluon_model_names(predictor: Any, leaderboard: pd.DataFrame) -> list[str
     return []
 
 
+def default_explanation_models(model_names: list[str], leaderboard: pd.DataFrame) -> list[str]:
+    if not leaderboard.empty and "model" in leaderboard.columns:
+        singles = [str(row.get("model")) for _, row in leaderboard.iterrows() if is_single_model_row(row)]
+    else:
+        singles = [name for name in model_names if not is_ensemble_model_name(name)]
+    defaults = [name for name in singles if name in model_names][:2]
+    return defaults if len(defaults) == 2 else model_names[:2]
+
+
 def autogluon_probability_dict(predictor: Any, features: pd.DataFrame, model_name: str) -> dict[str, float]:
     try:
         probabilities = predictor.predict_proba(features, model=model_name, as_multiclass=True)
@@ -847,6 +859,17 @@ def coerce_like_reference(data: Any, columns: list[str], reference: pd.DataFrame
     return frame
 
 
+def scalar_float(value: Any) -> float | None:
+    try:
+        array = np.asarray(value, dtype=float)
+    except (TypeError, ValueError):
+        return None
+    if array.size == 0:
+        return None
+    result = float(array.flat[0])
+    return result if pd.notna(result) else None
+
+
 def shap_background_data(training_data: pd.DataFrame, feature_columns: list[str], target: str | None) -> pd.DataFrame:
     if training_data.empty:
         return pd.DataFrame()
@@ -868,7 +891,7 @@ def shap_values_for_model(
     background: pd.DataFrame,
     task_type: str,
     target_output: str | None,
-) -> np.ndarray:
+) -> dict[str, Any]:
     try:
         import shap
     except ImportError as exc:
@@ -908,7 +931,16 @@ def shap_values_for_model(
     values = np.asarray(raw_values)
     while values.ndim > 1:
         values = values[0]
-    return values.astype(float)
+    shap_values = values.astype(float)
+    base_value = scalar_float(getattr(explainer, "expected_value", None))
+    model_output_value = scalar_float(model_output(features))
+    if model_output_value is None and base_value is not None:
+        model_output_value = base_value + float(np.sum(shap_values))
+    return {
+        "values": shap_values,
+        "base_value": base_value,
+        "model_output": model_output_value,
+    }
 
 
 def shap_table(feature_columns: list[str], values: np.ndarray, sample: pd.DataFrame) -> pd.DataFrame:
@@ -924,6 +956,162 @@ def shap_table(feature_columns: list[str], values: np.ndarray, sample: pd.DataFr
             }
         )
     return pd.DataFrame(rows).sort_values("abs_shap", ascending=False)
+
+
+def shap_summary_dataframe(payload: dict[str, Any]) -> pd.DataFrame:
+    values = np.asarray(payload.get("values", []), dtype=float)
+    base_value = payload.get("base_value")
+    model_output_value = payload.get("model_output")
+    shap_sum = float(np.sum(values)) if values.size else None
+    reconstructed = base_value + shap_sum if isinstance(base_value, (int, float)) and shap_sum is not None else None
+    rows = [
+        {"item": "Base output", "value": format_metric(base_value), "meaning": "background sample 평균 출력"},
+        {"item": "SHAP sum", "value": format_delta(shap_sum), "meaning": "이 row의 feature 기여도 합"},
+        {"item": "Final output", "value": format_metric(model_output_value), "meaning": "설명 target의 모델 출력"},
+    ]
+    if reconstructed is not None:
+        rows.append({"item": "Base + SHAP sum", "value": format_metric(reconstructed), "meaning": "SHAP additive check"})
+    return pd.DataFrame(rows)
+
+
+def format_feature_value(value: Any) -> str:
+    if isinstance(value, (int, float, np.integer, np.floating)) and pd.notna(value):
+        numeric = float(value)
+        return f"{numeric:,.0f}" if numeric.is_integer() else f"{numeric:,.3f}"
+    return str(value)
+
+
+def shap_diverging_chart_html(explanation: pd.DataFrame) -> str:
+    chart_df = explanation.copy()
+    chart_df["impact"] = np.where(chart_df["shap_value"] >= 0, "increases target", "decreases target")
+    max_abs = float(chart_df["abs_shap"].max()) if not chart_df.empty else 1.0
+    max_abs = max(max_abs, 1e-12)
+    rows = []
+    for _, row in chart_df.iterrows():
+        shap_value = float(row["shap_value"])
+        width = min(abs(shap_value) / max_abs * 48.0, 48.0)
+        if shap_value >= 0:
+            bar_style = f"left:50%;width:{width:.2f}%;background:#d94f45;"
+            value_class = "positive"
+        else:
+            bar_style = f"left:{50.0 - width:.2f}%;width:{width:.2f}%;background:#2f6bc2;"
+            value_class = "negative"
+        rows.append(
+            textwrap.dedent(f"""
+            <div class="shap-row">
+              <div class="shap-feature">
+                <strong>{html.escape(str(row["feature"]))}</strong>
+                <span>value={html.escape(format_feature_value(row["input_value"]))}</span>
+              </div>
+              <div class="shap-track">
+                <div class="shap-zero"></div>
+                <div class="shap-bar" style="{bar_style}"></div>
+              </div>
+              <div class="shap-value {value_class}">{shap_value:+.4f}</div>
+            </div>
+            """).strip()
+        )
+    legend = textwrap.dedent("""
+    <div class="shap-legend">
+      <span><i class="neg"></i>decreases target</span>
+      <span><i class="pos"></i>increases target</span>
+    </div>
+    """).strip()
+    return textwrap.dedent(f"""
+    <style>
+      .shap-legend {{
+        display: flex;
+        gap: 1rem;
+        margin: 0.25rem 0 0.75rem 0;
+        color: #6b7280;
+        font-size: 0.86rem;
+      }}
+      .shap-legend i {{
+        display: inline-block;
+        width: 0.75rem;
+        height: 0.75rem;
+        border-radius: 0.15rem;
+        margin-right: 0.35rem;
+        vertical-align: -0.08rem;
+      }}
+      .shap-legend .neg {{ background: #2f6bc2; }}
+      .shap-legend .pos {{ background: #d94f45; }}
+      .shap-row {{
+        display: grid;
+        grid-template-columns: minmax(6.5rem, 9rem) minmax(12rem, 1fr) 5.25rem;
+        align-items: center;
+        gap: 0.7rem;
+        margin: 0.5rem 0;
+      }}
+      .shap-feature {{
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        line-height: 1.12;
+      }}
+      .shap-feature strong {{
+        color: #1f2937;
+        font-size: 0.9rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }}
+      .shap-feature span {{
+        color: #6b7280;
+        font-size: 0.72rem;
+        margin-top: 0.18rem;
+      }}
+      .shap-track {{
+        position: relative;
+        height: 1.35rem;
+        background: #f3f4f6;
+        border-radius: 0.25rem;
+        overflow: hidden;
+      }}
+      .shap-zero {{
+        position: absolute;
+        left: 50%;
+        top: 0;
+        width: 1px;
+        height: 100%;
+        background: #6b7280;
+        opacity: 0.75;
+      }}
+      .shap-bar {{
+        position: absolute;
+        top: 0.25rem;
+        height: 0.85rem;
+        border-radius: 0.18rem;
+      }}
+      .shap-value {{
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+        font-size: 0.86rem;
+      }}
+      .shap-value.negative {{ color: #2f6bc2; }}
+      .shap-value.positive {{ color: #b83b35; }}
+    </style>
+    {legend}
+    {''.join(rows)}
+    """).strip()
+
+
+def shap_comparison_dataframe(model_payloads: list[dict[str, Any]]) -> pd.DataFrame:
+    if len(model_payloads) != 2:
+        return pd.DataFrame()
+    left, right = model_payloads
+    left_df = left["explanation"][["feature", "shap_value"]].rename(
+        columns={"shap_value": f"{left['display_name']} shap"}
+    )
+    right_df = right["explanation"][["feature", "shap_value"]].rename(
+        columns={"shap_value": f"{right['display_name']} shap"}
+    )
+    merged = left_df.merge(right_df, on="feature", how="outer").fillna(0.0)
+    left_col = f"{left['display_name']} shap"
+    right_col = f"{right['display_name']} shap"
+    merged["difference"] = (merged[left_col] - merged[right_col]).abs()
+    merged["same_direction"] = np.sign(merged[left_col]) == np.sign(merged[right_col])
+    return merged.sort_values("difference", ascending=False).head(10)
 
 
 def render_autogluon_local_explanation(
@@ -950,7 +1138,7 @@ def render_autogluon_local_explanation(
         st.info("AutoGluon 내부 모델이 2개 이상 있을 때 local explanation을 비교할 수 있습니다.")
         return
 
-    default_models = model_names[:2]
+    default_models = default_explanation_models(model_names, leaderboard)
     selected_models = st.multiselect(
         "Compare AutoGluon models",
         options=model_names,
@@ -1003,14 +1191,16 @@ def render_autogluon_local_explanation(
     st.markdown("#### Model Responses")
     st.dataframe(pd.DataFrame(comparison_rows), use_container_width=True, hide_index=True)
 
+    explanation_payloads = []
     columns = st.columns(2)
     for column, (model_name, prediction_row, _) in zip(columns, model_payloads):
         with column:
-            st.markdown(f"#### {display_model_name(record, model_name)}")
+            display_name = display_model_name(record, model_name)
+            st.markdown(f"#### {display_name}")
             st.caption(f"raw_model={model_name}")
             try:
                 with st.spinner("Computing SHAP values..."):
-                    values = shap_values_for_model(
+                    shap_payload = shap_values_for_model(
                         predictor=predictor,
                         model_name=model_name,
                         features=features,
@@ -1018,19 +1208,41 @@ def render_autogluon_local_explanation(
                         task_type=task_type,
                         target_output=prediction_row.get("explanation_target"),
                     )
-                explanation = shap_table(feature_columns, values, features).head(10)
+                values = np.asarray(shap_payload.get("values", []), dtype=float)
+                explanation_full = shap_table(feature_columns, values, features)
+                explanation = explanation_full.head(10)
+                explanation_payloads.append(
+                    {
+                        "display_name": display_name,
+                        "raw_model": model_name,
+                        "explanation": explanation_full,
+                        "payload": shap_payload,
+                    }
+                )
                 st.caption(
                     f"target={prediction_row.get('explanation_target')} · "
                     f"value={prediction_row.get('target_value')}"
                 )
-                st.bar_chart(explanation.set_index("feature")[["shap_value"]])
-                st.dataframe(
-                    explanation[["feature", "input_value", "shap_value", "direction"]],
-                    use_container_width=True,
-                    hide_index=True,
+                st.dataframe(shap_summary_dataframe(shap_payload), use_container_width=True, hide_index=True)
+                components.html(
+                    shap_diverging_chart_html(explanation),
+                    height=max(360, min(560, 92 + len(explanation) * 42)),
+                    scrolling=False,
                 )
+                with st.expander("Detailed SHAP table"):
+                    st.dataframe(
+                        explanation_full[["feature", "input_value", "shap_value", "direction"]],
+                        use_container_width=True,
+                        hide_index=True,
+                    )
             except Exception as exc:  # noqa: BLE001
                 st.error(f"SHAP 계산 실패: {exc}")
+
+    comparison_df = shap_comparison_dataframe(explanation_payloads)
+    if not comparison_df.empty:
+        st.markdown("#### Model Difference")
+        st.caption("두 모델에서 feature별 SHAP 기여도가 얼마나 다르게 나타나는지 비교합니다.")
+        st.dataframe(comparison_df, use_container_width=True, hide_index=True)
 
 
 def input_summary(values: dict[str, Any]) -> str:
