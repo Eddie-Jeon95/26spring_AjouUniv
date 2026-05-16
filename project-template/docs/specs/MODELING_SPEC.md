@@ -47,7 +47,48 @@ baseline은 다음 조건을 만족해야 합니다.
 
 ---
 
-## 3. Config 관리
+## 3. AutoGluon AutoML 원칙
+
+AutoML은 baseline 이후에 사용하는 pipeline 비교 실험입니다.
+이 템플릿의 기본 AutoML backend는 **AutoGluon Tabular만** 사용합니다.
+
+AutoGluon 실행 전에 `/plan-automl`에서 아래를 고정합니다.
+
+- task type과 target column
+- positive class
+- primary metric과 auxiliary metrics
+- `data_version`, split 비율, seed
+- leakage 제외 컬럼과 processed CSV
+- 성공 기준과 운영상 trade-off
+
+AutoML은 계획을 대신 세우지 않습니다. AutoGluon은 전처리, 모델, 하이퍼파라미터 조합을 탐색하지만, 어떤 metric을 최적화할지와 어떤 오류를 더 중요하게 볼지는 사람이 정합니다.
+
+실행 기준:
+
+- `scripts/train_automl.py`를 사용합니다.
+- baseline과 같은 processed CSV, target, split, seed, metric 조건에서 실행합니다.
+- AutoGluon에는 train과 validation만 전달합니다.
+- test set은 `evaluate()`와 `leaderboard(test_data)`로 최종 확인할 때만 사용합니다.
+- AutoGluon artifact는 `models/automl/<run_id>/`에 저장합니다.
+- run directory에는 `leaderboard.csv`, `automl_summary.json`, `metrics.json`, `test_metrics.json`을 저장합니다.
+- binary classification에서 positive class와 probability가 있으면 `threshold_metrics.csv`를 저장합니다.
+
+AutoGluon 결과가 baseline보다 좋아도 다음을 함께 봅니다.
+
+- validation/test 성능 차이
+- primary metric과 auxiliary metric의 trade-off
+- fit time과 추론 가능성
+- pipeline 복잡도
+- leakage 후보 feature 사용 여부
+- test set이 모델 선택에 쓰이지 않았는지
+
+global feature importance, global SHAP, batch prediction은 현재 MVP 범위에서 제외합니다.
+단, AutoGluon 내부 모델 2개를 같은 입력 row로 비교하는 local SHAP explanation은 Prediction 탭에서 지원합니다.
+이 설명은 모델 판단의 근거 후보이지 인과 설명이 아닙니다.
+
+---
+
+## 4. Config 관리
 
 `configs/default.yaml`은 항상 실행 가능한 demo/default 예시여야 합니다.
 실제 프로젝트에서는 학생이 YAML을 직접 수정하기보다 `scripts/train.py`에 CLI 인자를 넘겨 실행합니다.
@@ -60,11 +101,11 @@ Data Card에서 정한 split을 맞출 때도 YAML을 고치기보다 `--test-si
 - 심화 프로젝트: 필요하면 `configs/default.yaml`을 복사해 `configs/<experiment>.yaml` 생성
 - 심화 프로젝트: MLflow나 DVC를 선택적으로 추가
 
-config에는 최소한 seed, data path, target column, data_version, model name, model params, primary metric이 있어야 합니다.
+config에는 최소한 seed, task type, positive class, data path, target column, data_version, model name, model params, primary metric, auxiliary metrics가 있어야 합니다.
 
 ---
 
-## 4. 실험 기록 기준
+## 5. 실험 기록 기준
 
 학습 실행 후 다음이 남아야 합니다.
 
@@ -82,14 +123,25 @@ config에는 최소한 seed, data path, target column, data_version, model name,
 - data_version
 - config_hash
 - primary_metric
+- auxiliary_metrics
+- task_type
+- positive_class
 - metrics
 - artifact_path
 - confusion_matrix_path
+- threshold_metrics_path
 - limitations
+
+AutoGluon 실험 record에는 추가로 아래 필드를 기록합니다.
+
+- `experiment_type=automl`
+- `backend=autogluon`
+- `leaderboard_path`
+- `automl_summary_path`
 
 ---
 
-## 5. 모델 개선 기준
+## 6. 모델 개선 기준
 
 모델이 개선됐다고 말하려면 다음 중 2개 이상을 제시하세요.
 
@@ -104,7 +156,7 @@ config에는 최소한 seed, data path, target column, data_version, model name,
 
 ---
 
-## 6. 최종 모델 선택 기준
+## 7. 최종 모델 선택 기준
 
 최종 모델은 다음 질문에 답할 수 있어야 합니다.
 

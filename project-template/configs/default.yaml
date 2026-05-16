@@ -8,6 +8,10 @@
 seed: 42
 experiment_name: baseline
 
+task:
+  type: classification
+  positive_class: null
+
 data:
   path: data/raw/dataset.csv
   target_column: label
@@ -30,3 +34,13 @@ tracking:
   data_manifest_path: data_manifest.json
   model_registry_path: model_registry.json
   primary_metric: accuracy
+  auxiliary_metrics:
+    - macro_f1
+    - precision_macro
+    - recall_macro
+
+automl:
+  backend: autogluon
+  save_dir: models/automl
+  time_limit: 300
+  presets: medium_quality

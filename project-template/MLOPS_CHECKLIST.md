@@ -10,6 +10,7 @@
 - [ ] `docs/specs/PROJECT_SPEC.md`를 확인했는가?
 - [ ] 해결하려는 문제가 한 문장으로 명확한가?
 - [ ] 입력과 출력이 구체적으로 정의되어 있는가?
+- [ ] task type과 binary classification positive class를 정했는가?
 - [ ] 예측 오류가 실제 사용자나 서비스에 어떤 영향을 주는지 설명할 수 있는가?
 - [ ] 주요 metric과 보조 metric을 정했고, 선택 이유를 설명할 수 있는가?
 
@@ -33,6 +34,8 @@
 - [ ] scaler, encoder, imputer 등은 train 데이터로만 fit했는가?
 - [ ] 시간 순서가 중요한 문제에서 미래 정보가 섞이지 않았는가?
 - [ ] 중복 샘플이 train/test에 동시에 들어가지 않았는가?
+- [ ] AutoML 전에 제외할 leakage 후보 컬럼을 확정했는가?
+- [ ] test set을 모델 선택이나 threshold 선택에 사용하지 않았는가?
 
 ---
 
@@ -44,6 +47,9 @@
 - [ ] 새 실험마다 가설, 변경점, 비교 기준을 정했는가?
 - [ ] 실험 config와 metric이 `experiments/runs/`에 저장되는가?
 - [ ] Streamlit 시각화를 위한 `confusion_matrix.json`이 run마다 저장되는가?
+- [ ] binary classification이면 `threshold_metrics.csv` 생성 여부를 확인했는가?
+- [ ] AutoGluon을 실행한다면 `/plan-automl`로 metric, split, leakage 제외 컬럼, 성공 기준을 먼저 고정했는가?
+- [ ] AutoGluon 결과를 전처리 + 모델 + 하이퍼파라미터 pipeline 비교로 해석했는가?
 - [ ] 실패한 실험도 기록했는가?
 
 ---
@@ -52,6 +58,7 @@
 
 - [ ] `docs/specs/METRICS_AND_INTERPRETATION_SPEC.md`의 비교 기준을 확인했는가?
 - [ ] 최소 2개 이상의 모델 또는 feature 실험을 비교했는가?
+- [ ] baseline과 AutoGluon을 같은 `data_version`, split, metric 기준에서만 직접 비교했는가?
 - [ ] metric 개선이 우연인지, 데이터 split이나 seed에 취약한지 확인했는가?
 - [ ] 성능이 좋아진 이유를 데이터나 error case로 설명할 수 있는가?
 - [ ] `reports/EXPERIMENT_REPORT.md`에 주요 실험 결과를 요약했는가?
@@ -73,6 +80,7 @@
 
 - [ ] `CLAUDE.md`의 Claude Code 작업 기준을 확인했는가?
 - [ ] `python scripts/train.py --data ... --target ... --data-version ...` 실행 흐름이 유지되는가?
+- [ ] AutoGluon 사용 시 `python scripts/train_automl.py --data ... --target ... --data-version ...` 실행 흐름이 유지되는가?
 - [ ] seed, config, data_version, model_id가 실험마다 남는가?
 - [ ] 큰 데이터와 모델 파일은 Git에 올리지 않고 외부 링크나 경로만 기록했는가?
 - [ ] DVC/MLflow를 쓰지 않아도 기본 실험 추적이 가능한가?
@@ -82,7 +90,10 @@
 
 ## 8. 데모와 간단한 운영 관점
 
-- [ ] Streamlit에서 모델 버전별 metric 추이와 confusion matrix를 확인할 수 있는가?
+- [ ] Streamlit에서 Overview, Leaderboard, Evaluation, Prediction, Logs 탭을 확인할 수 있는가?
+- [ ] Streamlit에서 AutoGluon `leaderboard.csv`와 `automl_summary.json`을 확인할 수 있는가?
+- [ ] AutoGluon record에서 내부 모델 2개 local SHAP explanation을 같은 입력 row로 비교할 수 있는가?
+- [ ] binary classification이면 Streamlit에서 threshold별 precision/recall/F1을 확인할 수 있는가?
 - [ ] Streamlit에서 추론 요청 수, 에러율, 평균/P95 latency를 확인할 수 있는가?
 - [ ] CPU 환경에서도 추론이 동작하는가?
 - [ ] 추론 로그에 timestamp, latency, status 정도는 남는가?

@@ -17,8 +17,11 @@ disable-model-invocation: true
 - `docs/specs/DATA_ANALYSIS_SPEC.md`에서 데이터 품질/누수 기준 확인
 - `docs/specs/METRICS_AND_INTERPRETATION_SPEC.md`에서 error analysis 기준 확인
 - `model_registry.json`에서 분석할 run_id 확인
+- registry record의 `task_type`, `positive_class`, `primary_metric`, `threshold_metrics_path`, `experiment_type`, `backend` 확인
 - 해당 `experiments/runs/<run_id>/metrics.json` 읽기
 - 가능하면 `experiments/runs/<run_id>/confusion_matrix.json` 읽기
+- binary classification이면 가능하면 `experiments/runs/<run_id>/threshold_metrics.csv` 읽기
+- AutoGluon record이면 가능하면 `leaderboard.csv`, `automl_summary.json` 읽기
 - 가능하면 `experiments/runs/<run_id>/predictions.csv` 읽기
 - 가능하면 `experiments/runs/<run_id>/config.yaml`을 읽어 data path, split, seed를 확인
 - `predictions.csv`에 `original_index`와 feature columns가 있는지 확인
@@ -27,6 +30,9 @@ disable-model-invocation: true
 - 중복/누수 의심을 말하기 전에는 processed 파일에서 `df.duplicated().sum()`과 feature-only duplicate 수를 실제로 계산
 
 ## 2단계: 실패 유형화
+
+classification이면 confusion matrix, class별 precision/recall/F1, threshold별 precision/recall trade-off를 확인합니다.
+regression이면 `mae`, `rmse`, `r2`, 큰 residual 사례를 중심으로 확인합니다.
 
 ```markdown
 ## Error Types
@@ -41,7 +47,8 @@ disable-model-invocation: true
 - 데이터 품질 개선
 - feature engineering
 - metric 또는 threshold 조정
-- 모델/하이퍼파라미터 변경
+- baseline 모델/하이퍼파라미터 변경
+- baseline 분석 뒤 필요하면 `/plan-automl`로 AutoGluon 비교 실험 계획
 - 추가 수집이나 라벨 재검토
 
 ## 4단계: 리포트 반영
@@ -59,5 +66,7 @@ disable-model-invocation: true
 주의:
 - 개인정보나 민감한 원본 샘플은 그대로 출력하지 마세요.
 - 근거 없이 모델 변경만 제안하지 말고, 어떤 실패 유형을 줄이려는지 연결하세요.
+- binary classification의 threshold 후보는 validation 기준으로만 제안하고 test set으로 선택하지 마세요.
+- AutoGluon 결과 분석 시 pipeline 복잡도와 leakage 후보 feature 위험을 함께 언급하세요.
 - 화면에 반올림되어 같은 값처럼 보이는 행을 exact duplicate로 단정하지 마세요.
 - processed 데이터의 exact duplicate가 0개라면 “잔여 중복 가능성”을 다음 실험 근거로 제안하지 마세요.

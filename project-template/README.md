@@ -8,7 +8,7 @@
 
 이 README는 `project-template/`를 복사한 뒤 실제 프로젝트에서 따라가는 상세 진행 가이드입니다. 처음에는 아래 순서대로 진행하세요.
 
-1. `docs/specs/PROJECT_SPEC.md`에 문제 정의, 입력/출력, 주요 metric, Streamlit 최종 화면 기준을 간단히 적습니다.
+1. `docs/specs/PROJECT_SPEC.md`에 문제 정의, 입력/출력, task type, positive class, primary/auxiliary metric, Streamlit 최종 화면 기준을 간단히 적습니다.
 2. 원본 데이터를 `data/raw/`에 넣고 Claude에게 파일명과 target 후보를 알려 EDA를 요청합니다.
    - 예: `/eda data/raw/[raw_file] target=[target]`
 3. EDA notebook 결과를 보고 `reports/DATA_CARD.md`에 데이터 품질과 전처리 결정을 정리합니다.
@@ -16,10 +16,11 @@
    - 예: `/preprocess-data data/raw/[raw_file] target=[target] output=data/processed/[processed_file]`
 5. processed 파일명과 target을 알려 baseline 학습을 요청합니다.
    - 예: `/train-baseline data/processed/[processed_file] target=[target] data_version=[data_version] test_size=0.2 val_size=0.2`
-6. 새 실험 전에는 `/plan-experiment [실험 아이디어]`로 가설과 비교 기준을 정합니다.
-7. 실험 후에는 `/log-experiment`, `/compare-models`, `/analyze-errors`로 결과와 한계를 기록합니다.
-8. 단계가 끝날 때마다 `/checkpoint [메시지]`로 문서/코드 변경을 검토하고 commit합니다.
-9. 마지막에 `/check-streamlit`으로 산출물 연결을 점검하고 앱 URL을 확인합니다.
+6. baseline 결과를 `/compare-models` 또는 `/analyze-errors`로 확인하고, AutoML이 필요한지 판단합니다.
+7. AutoGluon을 실행하기 전에는 `/plan-automl`로 metric, split, leakage 제외 컬럼, 성공 기준을 고정합니다.
+8. AutoML 실행 후에는 `/compare-models`, `/analyze-errors`로 baseline과 같은 `data_version` 기준에서 결과와 한계를 기록합니다.
+9. 단계가 끝날 때마다 `/checkpoint [메시지]`로 문서/코드 변경을 검토하고 commit합니다.
+10. 마지막에 `/check-streamlit`으로 산출물 연결을 점검하고 앱 URL을 확인합니다.
 
 `configs/default.yaml`을 직접 수정하는 것이 기본 흐름은 아닙니다.
 파일명, target, data_version을 Claude Code 대화나 slash command 인자로 알려주면 Claude가 실행 명령을 맞춰줍니다.
@@ -40,6 +41,7 @@
 - **문제 정의**:
 - **입력 -> 출력**:
 - **사용자 / 활용 상황**:
+- **Task type / positive class**:
 - **주요 평가 지표**:
 
 문제 정의와 성공 기준은 `docs/specs/PROJECT_SPEC.md`에 먼저 정리합니다.
@@ -82,6 +84,7 @@ scaler, encoder, imputer처럼 train 데이터에 fit해야 하는 변환은 학
 
 - **Baseline 모델**:
 - **평가 지표 선택 이유**:
+- **AutoML 사용 여부와 목적**:
 - **주요 실험 요약**:
 - **최종 모델 선택 이유**:
 
@@ -91,6 +94,7 @@ scaler, encoder, imputer처럼 train 데이터에 fit해야 하는 변환은 학
 
 자세한 실험 로그는 `experiments/runs/`와 `model_registry.json`을 확인합니다.
 Streamlit에서 볼 confusion matrix는 각 run의 `confusion_matrix.json`을 사용합니다.
+AutoGluon을 실행했다면 `leaderboard.csv`와 `automl_summary.json`을 함께 확인합니다.
 모델링 기준은 `docs/specs/MODELING_SPEC.md`를 따릅니다.
 
 ---
@@ -117,6 +121,12 @@ source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
+AutoGluon AutoML을 실행할 때만 별도 의존성을 설치합니다.
+
+```bash
+pip install -r requirements-automl.txt
+```
+
 ### 전처리
 
 ```bash
@@ -137,12 +147,41 @@ python scripts/train.py \
   --data data/processed/[processed_file] \
   --target [target] \
   --data-version [data_version] \
+  --task-type classification \
+  --primary-metric macro_f1 \
+  --metrics accuracy,precision_macro,recall_macro \
   --test-size 0.2 \
   --val-size 0.2
 ```
 
 데이터 파일이 아직 없으면 scikit-learn 샘플 데이터로 baseline 흐름을 확인합니다.
 실제 프로젝트에서는 먼저 `scripts/preprocess.py`로 `data/processed/`에 학습용 CSV를 만든 뒤 위 명령처럼 실행합니다.
+
+### AutoGluon AutoML
+
+AutoML은 baseline 이후, 같은 processed 데이터와 split/metric 조건에서 pipeline 후보를 비교할 때 실행합니다.
+실행 전에 `/plan-automl`로 task, metric, split, leakage 제외 컬럼, 성공 기준을 먼저 고정합니다.
+
+```bash
+python scripts/train_automl.py \
+  --data data/processed/[processed_file] \
+  --target [target] \
+  --data-version [data_version] \
+  --task-type classification \
+  --primary-metric macro_f1 \
+  --metrics accuracy,precision_macro,recall_macro \
+  --test-size 0.2 \
+  --val-size 0.2 \
+  --time-limit 300 \
+  --presets medium_quality
+```
+
+AutoGluon 결과는 `models/automl/<run_id>/`와 `experiments/runs/<run_id>/`에 저장됩니다.
+test set은 최종 확인용이며 모델 선택이나 threshold 선택에 사용하지 않습니다.
+Streamlit의 Prediction 탭에서는 AutoGluon 내부 모델 2개를 선택해 같은 입력 row의 응답과 local SHAP explanation을 비교할 수 있습니다.
+이 설명은 모델 판단의 근거 후보이지 인과 설명이 아닙니다.
+LIME은 local surrogate 대안으로 검토할 수 있지만 설명 안정성이 흔들릴 수 있어 기본 구현에서 제외합니다.
+DiCE/counterfactual은 예측을 바꾸기 위한 입력 변경을 찾는 목적에 가까워 현재 MVP에는 포함하지 않습니다.
 
 ### 추론 / 앱 실행
 
@@ -176,7 +215,10 @@ Claude Code와 협업할 때의 공통 기준은 `CLAUDE.md`를 확인합니다.
 - **데모 방식**: Streamlit Community Cloud / 로컬 실행 / 기타
 - **데모 URL**:
 - **기록하는 로그**: `logs/inference.jsonl`
-- **실험 대시보드**: 모델 버전별 metric 추이, 선택한 run의 confusion matrix
+- **실험 대시보드**: Overview, Leaderboard, Evaluation, Prediction, Logs
+- **AutoML 대시보드**: `leaderboard.csv`, `automl_summary.json`, validation/test metric
+- **Threshold 대시보드**: binary classification에서 `threshold_metrics.csv`가 있을 때 precision/recall/F1 확인
+- **Local explanation**: AutoGluon 내부 모델 2개에 같은 입력 row를 요청하고 SHAP으로 응답 이유 후보 비교
 - **로그 대시보드**: 요청 수, error rate, 평균/P95 latency, 최근 추론 로그
 - **운영 한계**:
 

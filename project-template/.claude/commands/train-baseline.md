@@ -1,6 +1,6 @@
 ---
-description: "processed CSV로 baseline 학습을 계획, 실행, 기록하는 흐름을 안내합니다."
-argument-hint: "[processed_path] target=[target] data_version=[version] [test_size=0.2] [val_size=0.2]"
+description: "processed CSV로 task/metric 기준을 고정하고 baseline 학습을 계획, 실행, 기록합니다."
+argument-hint: "[processed_path] target=[target] data_version=[version] [task_type=classification|regression] [primary_metric=...] [test_size=0.2] [val_size=0.2]"
 disable-model-invocation: true
 ---
 
@@ -25,8 +25,12 @@ $ARGUMENTS
 - `docs/specs/MODELING_SPEC.md`의 baseline 기준 확인
 - `docs/specs/METRICS_AND_INTERPRETATION_SPEC.md`의 metric 기준 확인
 - `reports/DATA_CARD.md`에서 processed 파일, target, 누수 의심, split 추천 확인
+- `docs/specs/PROJECT_SPEC.md`의 task type, positive class, primary/auxiliary metric 확인
 - processed CSV 파일이 존재하는지 확인
 - target column이 파일에 있는지 확인
+- classification인지 regression인지 확인
+- binary classification이면 positive class와 threshold 조정 가능 여부 확인
+- `--primary-metric`이 실제 계산 가능한 metric인지 확인
 - `DATA_CARD.md`의 split 추천과 `configs/default.yaml`의 split 기본값이 다르면, 가능한 경우 CLI 인자(`--test-size`, `--val-size`, `--no-stratify`)로 Data Card 추천을 맞춥니다.
 - CLI로 맞출 수 없는 split이면 실행 전에 사용자에게 짧게 확인하고, 그대로 진행한다면 `EXPERIMENT_REPORT.md`에 불일치 이유를 기록합니다.
 
@@ -39,6 +43,7 @@ $ARGUMENTS
 - 사용할 processed 데이터:
 - data_version:
 - target column:
+- task type / positive class:
 - 사용할 feature:
 - 제외할 feature와 이유:
 - split 방식 / seed:
@@ -58,11 +63,15 @@ python scripts/train.py \
   --data data/processed/[processed_file] \
   --target [target] \
   --data-version [data_version] \
+  --task-type classification \
+  --primary-metric macro_f1 \
+  --metrics accuracy,precision_macro,recall_macro \
   --test-size 0.2 \
   --val-size 0.2
 ```
 
-입력 인자에 `test_size=...`, `val_size=...`, `stratify=false`가 있으면 각각 `--test-size`, `--val-size`, `--no-stratify`로 변환해 실행합니다.
+regression이면 예를 들어 `--task-type regression --primary-metric rmse --metrics mae,rmse,r2`를 사용합니다.
+입력 인자에 `test_size=...`, `val_size=...`, `stratify=false`, `task_type=...`, `primary_metric=...`, `positive_class=...`가 있으면 각각 CLI 인자로 변환해 실행합니다.
 
 ## 4단계: 결과 기록
 
@@ -73,8 +82,10 @@ python scripts/train.py \
 - `metrics.json` (validation metric, 실험 비교 기준)
 - `test_metrics.json` (test metric, 최종 확인용)
 - `predictions.csv` (validation split 기준)
-- `confusion_matrix.json` (validation split 기준)
+- classification이면 `confusion_matrix.json` (validation split 기준)
+- binary classification이면 `threshold_metrics.csv` 생성 여부
 - `model_registry.json`의 새 record
+- registry record의 `task_type`, `positive_class`, `auxiliary_metrics`, `threshold_metrics_path`
 - run의 `config.yaml`에 저장된 split이 계획과 같은지 확인
 
 `reports/EXPERIMENT_REPORT.md`에 옮길 수 있게 정리하세요.
@@ -84,6 +95,8 @@ python scripts/train.py \
 - baseline model_id:
 - data_version:
 - 주요 metric:
+- 보조 metric:
+- threshold 필요 여부:
 - 비교 기준으로 삼을 이유:
 - 한계:
 - 다음 실험 후보:
@@ -95,6 +108,8 @@ python scripts/train.py \
 - data_version이 다른 실험과 직접 우열을 말하지 않습니다.
 - split이나 seed가 다른 실험도 직접 우열을 말하지 않습니다.
 - accuracy만 보고 결론을 내리지 말고 class별 성능과 confusion matrix 확인을 제안하세요.
+- regression에서는 `mae`, `rmse`, `r2`를 함께 보고 큰 오차 사례를 확인하세요.
+- binary classification에서 threshold 조정은 validation 기준으로 검토하고 test set으로 선택하지 마세요.
 - 실행에 사용된 effective config는 run 폴더의 `config.yaml`에 자동 저장됩니다.
 - `model_registry.json`의 `metrics`는 validation 기준이고, `test_metrics`는 최종 확인용입니다.
 - `predictions.csv`에 feature와 `original_index`가 있으면 오류 분석에 사용하고, 없으면 feature 값을 추측하지 말고 재현 가능한 split으로 다시 생성하거나 한계를 명시하세요.

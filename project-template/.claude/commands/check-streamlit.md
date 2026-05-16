@@ -25,9 +25,13 @@ $ARGUMENTS
 - `docs/specs/PROJECT_SPEC.md`의 최종 Streamlit 대시보드 기준 확인
 - `streamlit_app.py`가 존재하는지 확인
 - 앱이 최소한 다음 탭/기능을 제공하는지 확인
-  - Predict: feature 입력, 예측, 추론 로그 기록
-  - Experiments: 모델 버전별 metric, 선택 run의 confusion matrix
+  - Overview: task type, target, data_version, split size, feature count, class distribution, primary/auxiliary metric
+  - Leaderboard: AutoGluon `leaderboard.csv` 또는 registry 비교표
+  - Evaluation: validation/test metric, classification report, confusion matrix
+  - Prediction: sklearn pickle과 AutoGluon `TabularPredictor.load()` 단건 예측
+  - AutoGluon Prediction: 내부 모델 2개 선택, 같은 입력 row 예측 비교, local SHAP explanation 표시
   - Logs: 추론 요청 수, 에러율, 평균/P95 latency, 최근 로그
+  - binary classification이면 threshold slider와 precision/recall/F1/confusion count 표시
 
 ## 2단계: 모델 버전 registry 확인
 
@@ -39,9 +43,18 @@ $ARGUMENTS
   - `primary_metric`
   - `metrics`
   - `test_metrics`
+  - `task_type`
+  - `positive_class`
+  - `auxiliary_metrics`
   - `artifact_path`
   - `experiment_path`
   - `confusion_matrix_path`
+  - `threshold_metrics_path`
+- AutoGluon record라면 추가 필드 확인
+  - `experiment_type=automl`
+  - `backend=autogluon`
+  - `leaderboard_path`
+  - `automl_summary_path`
 - record가 2개 이상이면 sidebar에서 여러 모델/run을 선택할 수 있는 구조인지 확인
 - 같은 `data_version`끼리 metric 추이를 비교할 수 있는지 확인
 - `data_version`이 다른 모델은 직접 우열 비교하면 안 된다고 안내
@@ -50,10 +63,13 @@ $ARGUMENTS
 
 최신 record를 기본으로 보되, 가능하면 모든 record에 대해 확인합니다.
 
-- `artifact_path`의 `.pkl` 모델 파일 존재 여부
+- baseline이면 `artifact_path`의 `.pkl` 모델 파일 존재 여부
+- AutoGluon이면 `artifact_path` 디렉터리와 `metadata.json` 또는 predictor artifact 존재 여부
 - `experiment_path/metrics.json` 존재 여부 (validation metric)
 - `experiment_path/test_metrics.json` 존재 여부 (test metric)
-- `confusion_matrix_path` 존재 여부 (validation confusion matrix)
+- classification이면 `confusion_matrix_path` 존재 여부 (validation confusion matrix)
+- binary classification이면 `threshold_metrics_path` 존재 여부
+- AutoGluon이면 `leaderboard_path`, `automl_summary_path` 존재 여부
 - metric 값이 `model_registry.json`과 `metrics.json`에서 일관적인지 확인
 - 모델 파일이 없으면 재학습 또는 artifact 경로 확인을 안내
 
@@ -64,6 +80,7 @@ $ARGUMENTS
 ```bash
 python -m py_compile streamlit_app.py
 python -m py_compile src/utils/logger.py
+python -m py_compile scripts/train.py scripts/train_automl.py
 python -c "import streamlit; print(streamlit.__version__)"
 python -c "from src.utils.logger import InferenceLogger; print('logger OK')"
 ```
@@ -105,10 +122,16 @@ streamlit run streamlit_app.py --server.port 8502
 앱에서 확인할 항목:
 
 - sidebar에서 모델/run 선택 가능 여부
-- Predict 탭에서 선택한 run의 feature 입력 폼이 생성되는지
+- Overview 탭에서 task/data/metric 요약이 보이는지
+- Leaderboard 탭에서 AutoGluon leaderboard 또는 registry 비교표가 보이는지
+- Evaluation 탭에서 metric과 confusion matrix가 보이는지
+- binary classification이면 threshold slider가 표시되고 precision/recall/F1이 바뀌는지
+- Prediction 탭에서 선택한 run의 feature 입력 폼이 생성되는지
 - numeric feature는 median 기반 기본값, categorical feature는 선택지가 표시되는지
 - 예측 결과에 class label과 class별 probability가 표시되는지
-- Experiments 탭에서 metric 표와 confusion matrix가 보이는지
+- AutoGluon record이면 `TabularPredictor.load()` 기반 예측이 가능한지
+- AutoGluon record이면 내부 모델 2개를 선택해 prediction 비교표와 SHAP bar/table이 표시되는지
+- local SHAP explanation에 “인과 설명이 아님” 안내가 보이는지
 - Logs 탭에서 로그가 없을 때 빈 상태 안내가 보이는지
 - Predict를 1회 실행한 뒤 `logs/inference.jsonl`이 생성되는지
 
@@ -123,7 +146,7 @@ streamlit run streamlit_app.py --server.port 8502
 ---
 
 주의:
-- 이 커맨드는 앱 점검용입니다. 새 모델 학습은 `/train-baseline` 또는 `/plan-experiment` 이후 진행하세요.
+- 이 커맨드는 앱 점검용입니다. 새 모델 학습은 `/train-baseline` 또는 `/plan-automl` 이후 진행하세요.
 - 로그 원문에 개인정보나 민감 정보가 있으면 그대로 출력하지 말고 존재 여부만 알리세요.
 - Streamlit Cloud 배포 설정은 이 커맨드의 기본 범위가 아닙니다.
 - 로컬 앱 실행이 권한, 패키지 설치, 포트 문제로 실패하면 실패 원인과 다음 명령을 짧게 알려주세요.

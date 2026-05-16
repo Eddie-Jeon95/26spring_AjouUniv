@@ -1,0 +1,12 @@
+# AutoML 확장 의존성
+# 기본 requirements.txt는 가볍게 유지하고, AutoGluon 실험을 실행할 때만 설치합니다.
+
+-r requirements.txt
+
+# AutoGluon Tabular는 Python 3.10+ 환경을 전제로 합니다.
+# 필요한 모델 후보와 optional dependency를 포함한 tabular 설치입니다.
+autogluon.tabular[all]==1.5.0
+
+# AutoGluon 내부 모델을 black-box로 감싸 단일 row local explanation을 계산합니다.
+# 0.50+는 Python 3.11+가 필요하므로 Python 3.10 호환 버전을 고정합니다.
+shap==0.49.1

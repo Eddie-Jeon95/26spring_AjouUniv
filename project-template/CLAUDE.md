@@ -12,10 +12,11 @@
 1. 문제 정의
 2. 데이터 분석과 품질 점검
 3. baseline 모델 구축
-4. 실험 가설 기반 모델 개선
-5. 모델/데이터 버전 기록
-6. 결과 해석과 error analysis
-7. Streamlit 기반 실험 결과와 추론 로그 시각화
+4. baseline 결과 분석과 AutoML 필요성 판단
+5. AutoGluon 기반 pipeline 후보 비교
+6. 모델/데이터 버전 기록
+7. 결과 해석과 error analysis
+8. Streamlit 기반 실험 결과와 추론 로그 시각화
 
 코드를 대신 완성하는 것보다, 학생이 판단 근거를 남기며 개선하도록 돕는 것이 우선입니다.
 
@@ -47,6 +48,7 @@ notebooks/            # EDA와 탐색 분석
 reports/              # 데이터/실험/오류/모델 해석 리포트
 scripts/preprocess.py # raw 데이터를 processed CSV로 정돈하는 진입점
 scripts/train.py      # baseline 학습과 실험 기록 진입점
+scripts/train_automl.py # AutoGluon Tabular 학습과 실험 기록 진입점
 src/data/             # 전처리와 데이터 로드 확장 지점
 src/models/           # 모델 정의와 학습/추론 확장 지점
 src/utils/            # 로깅 등 공통 유틸리티
@@ -60,8 +62,8 @@ logs/                 # 추론 로그, Git 제외
 |------|---------------------|
 | 데이터 분석 | `data/raw/`, `notebooks/`, `reports/DATA_CARD.md`, `data_manifest.json` |
 | 전처리 | `scripts/preprocess.py`, `data/processed/`, `reports/DATA_CARD.md`, `data_manifest.json` |
-| 모델링 | `scripts/train.py`, `src/data/`, `src/models/`, `experiments/runs/`, `model_registry.json` |
-| 결과 해석 | `experiments/runs/<run_id>/metrics.json`, `predictions.csv`, `confusion_matrix.json`, `reports/EXPERIMENT_REPORT.md`, `reports/ERROR_ANALYSIS.md` |
+| 모델링 | `scripts/train.py`, `scripts/train_automl.py`, `src/data/`, `src/models/`, `experiments/runs/`, `model_registry.json` |
+| 결과 해석 | `experiments/runs/<run_id>/metrics.json`, `predictions.csv`, `confusion_matrix.json`, `leaderboard.csv`, `automl_summary.json`, `reports/EXPERIMENT_REPORT.md`, `reports/ERROR_ANALYSIS.md` |
 | 추가 모델링 / 데이터 추가 | 새 config, 새 `data_version`, 새 run 기록, `model_registry.json` |
 | Streamlit 시각화 | `streamlit_app.py`, `src/utils/logger.py`, `logs/inference.jsonl`, `model_registry.json`, `experiments/runs/` |
 
@@ -70,6 +72,9 @@ logs/                 # 추론 로그, Git 제외
 - `data_manifest.json`: 데이터 버전, 출처, 크기, checksum, split 기록
 - `model_registry.json`: model_id, data_version, config hash, metric, artifact 경로 기록
 - `experiments/runs/<run_id>/confusion_matrix.json`: Streamlit에서 선택한 run의 confusion matrix 시각화에 사용
+- `experiments/runs/<run_id>/threshold_metrics.csv`: binary classification threshold별 precision/recall/F1 확인
+- `experiments/runs/<run_id>/leaderboard.csv`: AutoGluon 후보 모델 비교
+- `experiments/runs/<run_id>/automl_summary.json`: AutoGluon 실행 조건과 선택 모델 요약
 - `logs/inference.jsonl`: Streamlit 데모 추론 요청, 상태, latency 기록
 - `reports/DATA_CARD.md`: 데이터 설명과 품질 위험
 - `reports/EXPERIMENT_REPORT.md`: 주요 실험의 가설, 결과, 해석
@@ -99,10 +104,15 @@ logs/                 # 추론 로그, Git 제외
 - 새 실험은 반드시 가설, 변경점, 비교 baseline, 성공/실패 기준을 가집니다.
 - config, metric, prediction sample, artifact path가 재현 가능하게 남아야 합니다.
 - 실제 프로젝트 baseline은 `python scripts/train.py --data ... --target ... --data-version ...` 형태의 CLI 인자를 우선 사용합니다.
+- task type, positive class, primary metric, auxiliary metrics를 먼저 정하고 CLI 인자로 명시합니다.
 - Data Card의 split 추천을 맞출 때는 YAML을 수정하지 말고 `--test-size`, `--val-size`, `--no-stratify` CLI 인자를 우선 사용합니다.
 - 실행에 사용된 effective config는 각 run의 `experiments/runs/<run_id>/config.yaml`에 자동 저장합니다.
 - `predictions.csv`에 feature와 `original_index`가 있으면 오류 분석에 사용합니다. 없으면 feature 값을 추측하지 말고 config와 seed로 split을 재현하거나 한계를 명시합니다.
 - 실험별 `confusion_matrix.json`을 남겨 Streamlit에서 모델별 오류 패턴을 확인할 수 있어야 합니다.
+- binary classification이고 positive class와 probability가 있으면 `threshold_metrics.csv`를 남깁니다.
+- AutoML은 AutoGluon Tabular만 사용하며, baseline 이후 `/plan-automl`에서 metric, split, leakage 제외 컬럼, 성공 기준을 고정한 뒤 실행합니다.
+- AutoGluon에는 train과 validation만 전달하고, test set은 최종 `evaluate()`와 leaderboard 확인에만 사용합니다.
+- AutoGluon 결과는 전처리 + 모델 + 하이퍼파라미터 pipeline 후보 비교로 해석합니다.
 - 모델 파일은 `models/` 또는 외부 저장소에 두고 Git에 올리지 않습니다.
 
 ### 결과 해석
@@ -110,7 +120,9 @@ logs/                 # 추론 로그, Git 제외
 - metric 숫자만 보고 결론을 내리지 않습니다.
 - data_version이나 split이 다른 실험은 직접 비교하지 않습니다.
 - class imbalance, threshold, error type, 모델 한계를 함께 봅니다.
-- 최종 Streamlit 화면에서는 모델 버전별 metric 추이, 선택한 run의 confusion matrix, 추론 로그의 요청 수/에러율/latency를 함께 확인할 수 있어야 합니다.
+- 최종 Streamlit 화면에서는 Overview, Leaderboard, Evaluation, Prediction, Logs 탭으로 baseline/AutoGluon 결과와 추론 로그를 함께 확인할 수 있어야 합니다.
+- global feature importance, global SHAP, batch prediction은 현재 MVP 범위에서 제외합니다. 단, AutoGluon 내부 모델 2개를 같은 입력 row로 비교하는 local SHAP explanation은 Prediction 탭에서 지원합니다.
+- 단일 row explanation은 모델 판단의 근거 후보이지 인과 설명이 아니므로 결과 해석에 한계를 함께 표시합니다.
 
 ### Claude 사용
 
@@ -130,6 +142,7 @@ logs/                 # 추론 로그, Git 제외
 | `/eda` | raw 파일 기준 EDA 계획과 notebook 실행 | `PROJECT_SPEC.md`, `DATA_ANALYSIS_SPEC.md` |
 | `/preprocess-data` | raw 파일을 processed CSV로 정리 | `DATA_CARD.md`, `DATA_ANALYSIS_SPEC.md` |
 | `/train-baseline` | processed CSV로 baseline 학습 | `MODELING_SPEC.md`, `EXPERIMENT_REPORT.md` |
+| `/plan-automl` | AutoGluon 실행 전 metric/split/leakage/성공 기준 고정 | `MODELING_SPEC.md`, `METRICS_AND_INTERPRETATION_SPEC.md` |
 | `/check-streamlit` | Streamlit 실행 전 모델/run/log 연결 점검 | `PROJECT_SPEC.md`, `model_registry.json`, `experiments/runs/`, `streamlit_app.py` |
 | `/checkpoint` | 단계 완료 후 문서/코드 변경 checkpoint commit | `CLAUDE.md`, `.gitignore`, `git status` |
 | `/plan-experiment` | 새 feature/model 실험 전 | `CLAUDE.md`, `MODELING_SPEC.md`, `METRICS_AND_INTERPRETATION_SPEC.md` |

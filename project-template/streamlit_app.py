@@ -15,6 +15,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import pandas as pd
 import streamlit as st
 import yaml
@@ -30,6 +31,7 @@ from src.utils.logger import InferenceLogger  # noqa: E402
 REGISTRY_PATH = BASE_DIR / "model_registry.json"
 LOG_PATH = BASE_DIR / "logs" / "inference.jsonl"
 MISSING_OPTION = "(missing)"
+LOWER_IS_BETTER_METRICS = {"mae", "rmse"}
 
 
 def short_id(value: Any, prefix: int = 10, suffix: int = 6) -> str:
@@ -74,11 +76,21 @@ def same_record(left: dict[str, Any] | None, right: dict[str, Any] | None) -> bo
     return bool(left and right and record_key(left) == record_key(right))
 
 
+def is_automl_record(record: dict[str, Any] | None) -> bool:
+    if not record:
+        return False
+    return record.get("experiment_type") == "automl" or record.get("backend") == "autogluon"
+
+
 def validation_metric_value(record: dict[str, Any], metric_name: str) -> float | None:
     value = record.get("metrics", {}).get(metric_name)
     if isinstance(value, (int, float)) and pd.notna(value):
         return float(value)
     return None
+
+
+def metric_lower_is_better(metric_name: str) -> bool:
+    return metric_name in LOWER_IS_BETTER_METRICS
 
 
 def records_for_data_version(registry: list[dict[str, Any]], data_version: str | None) -> list[dict[str, Any]]:
@@ -99,7 +111,7 @@ def ranked_records(registry: list[dict[str, Any]], primary_metric: str) -> list[
             validation_metric_value(record, primary_metric) or float("-inf"),
             str(record.get("created_at") or ""),
         ),
-        reverse=True,
+        reverse=not metric_lower_is_better(primary_metric),
     )
     without_metric.sort(key=lambda record: str(record.get("created_at") or ""), reverse=True)
     return with_metric + without_metric
@@ -134,6 +146,8 @@ def metric_delta(record: dict[str, Any], baseline: dict[str, Any] | None, primar
     baseline_value = validation_metric_value(baseline or {}, primary_metric)
     if value is None or baseline_value is None:
         return None
+    if metric_lower_is_better(primary_metric):
+        return baseline_value - value
     return value - baseline_value
 
 
@@ -203,6 +217,23 @@ def load_confusion_matrix(path: str) -> dict[str, Any]:
     return read_json(resolved, {})
 
 
+@st.cache_data
+def load_csv_artifact(path: str | None) -> pd.DataFrame:
+    resolved = resolve_path(path)
+    if resolved is None or not resolved.exists():
+        return pd.DataFrame()
+    return pd.read_csv(resolved)
+
+
+@st.cache_data
+def load_automl_summary(path: str | None) -> dict[str, Any]:
+    resolved = resolve_path(path)
+    if resolved is None or not resolved.exists():
+        return {}
+    summary = read_json(resolved, {})
+    return summary if isinstance(summary, dict) else {}
+
+
 @st.cache_resource
 def load_model(artifact_path: str) -> Any:
     resolved = resolve_path(artifact_path)
@@ -210,6 +241,21 @@ def load_model(artifact_path: str) -> Any:
         raise FileNotFoundError("artifact_path가 비어 있습니다.")
     with open(resolved, "rb") as f:
         return pickle.load(f)
+
+
+@st.cache_resource
+def load_autogluon_model(artifact_path: str) -> Any:
+    try:
+        from autogluon.tabular import TabularPredictor
+    except ImportError as exc:
+        raise ImportError(
+            "AutoGluon이 설치되어 있지 않습니다. `pip install -r requirements-automl.txt` 후 다시 실행하세요."
+        ) from exc
+
+    resolved = resolve_path(artifact_path)
+    if resolved is None:
+        raise FileNotFoundError("artifact_path가 비어 있습니다.")
+    return TabularPredictor.load(str(resolved))
 
 
 @st.cache_data
@@ -345,6 +391,15 @@ def target_column(config: dict[str, Any]) -> str | None:
 
 def model_feature_columns(model: Any, config: dict[str, Any], data: pd.DataFrame) -> list[str]:
     try:
+        feature_metadata = getattr(model, "feature_metadata", None)
+        if feature_metadata is not None:
+            features = feature_metadata.get_features()
+            if features:
+                return [str(column) for column in features]
+    except (AttributeError, TypeError, ValueError):
+        pass
+
+    try:
         preprocessor = model.named_steps["preprocessor"]
         columns: list[str] = []
         for _, _, transformer_columns in preprocessor.transformers_:
@@ -469,9 +524,298 @@ def render_feature_input(column: str, data: pd.DataFrame) -> Any:
 def prediction_probabilities(model: Any, features: pd.DataFrame) -> dict[str, float]:
     if not hasattr(model, "predict_proba"):
         return {}
-    probabilities = model.predict_proba(features)[0]
+    probabilities = model.predict_proba(features)
+
+    if isinstance(probabilities, pd.DataFrame):
+        first_row = probabilities.iloc[0]
+        return {str(label): float(value) for label, value in first_row.items()}
+
+    if isinstance(probabilities, pd.Series):
+        positive_class = getattr(model, "positive_class", None)
+        class_labels = [str(value) for value in getattr(model, "class_labels", [])]
+        if positive_class is None and len(class_labels) == 2:
+            positive_class = class_labels[1]
+        positive_label = str(positive_class or "positive")
+        negative_label = class_labels[0] if len(class_labels) == 2 else "negative"
+        positive_probability = float(probabilities.iloc[0])
+        return {
+            str(negative_label): 1.0 - positive_probability,
+            positive_label: positive_probability,
+        }
+
+    probabilities_array = probabilities[0]
     classes = [str(value) for value in getattr(model, "classes_", [])]
-    return {class_label: float(probabilities[index]) for index, class_label in enumerate(classes)}
+    return {class_label: float(probabilities_array[index]) for index, class_label in enumerate(classes)}
+
+
+def first_prediction_value(prediction: Any) -> Any:
+    if hasattr(prediction, "iloc"):
+        return prediction.iloc[0]
+    array = np.asarray(prediction)
+    return array[0] if array.size else None
+
+
+def autogluon_model_names(predictor: Any, leaderboard: pd.DataFrame) -> list[str]:
+    if not leaderboard.empty and "model" in leaderboard.columns:
+        names = [str(value) for value in leaderboard["model"].dropna().tolist()]
+        if names:
+            return list(dict.fromkeys(names))
+
+    for method_name in ["model_names", "get_model_names"]:
+        method = getattr(predictor, method_name, None)
+        if callable(method):
+            try:
+                names = [str(value) for value in method()]
+            except TypeError:
+                names = [str(value) for value in method(can_infer=True)]
+            if names:
+                return list(dict.fromkeys(names))
+    return []
+
+
+def autogluon_probability_dict(predictor: Any, features: pd.DataFrame, model_name: str) -> dict[str, float]:
+    try:
+        probabilities = predictor.predict_proba(features, model=model_name, as_multiclass=True)
+    except TypeError:
+        probabilities = predictor.predict_proba(features, model=model_name)
+
+    if isinstance(probabilities, pd.DataFrame):
+        first_row = probabilities.iloc[0]
+        return {str(label): float(value) for label, value in first_row.items()}
+    if isinstance(probabilities, pd.Series):
+        positive_class = str(getattr(predictor, "positive_class", "") or "positive")
+        labels = [str(value) for value in getattr(predictor, "class_labels", [])]
+        negative_class = next((label for label in labels if label != positive_class), "negative")
+        positive_probability = float(probabilities.iloc[0])
+        return {
+            negative_class: 1.0 - positive_probability,
+            positive_class: positive_probability,
+        }
+    array = np.asarray(probabilities)
+    if array.ndim == 1:
+        positive_class = str(getattr(predictor, "positive_class", "") or "positive")
+        negative_class = "negative"
+        return {negative_class: float(1.0 - array[0]), positive_class: float(array[0])}
+    labels = [str(value) for value in getattr(predictor, "class_labels", [])]
+    return {label: float(array[0, index]) for index, label in enumerate(labels)}
+
+
+def autogluon_prediction_row(
+    predictor: Any,
+    features: pd.DataFrame,
+    model_name: str,
+    task_type: str,
+    positive_class: str | None,
+) -> tuple[dict[str, Any], dict[str, float]]:
+    prediction = first_prediction_value(predictor.predict(features, model=model_name))
+    probabilities = autogluon_probability_dict(predictor, features, model_name) if task_type == "classification" else {}
+    target_output = None
+    if task_type == "classification":
+        if positive_class and positive_class in probabilities and len(probabilities) == 2:
+            target_output = positive_class
+        else:
+            target_output = str(prediction)
+    confidence = probabilities.get(str(prediction)) if probabilities else None
+    if task_type == "classification" and target_output in probabilities:
+        target_value = probabilities[target_output]
+    else:
+        target_value = float(prediction) if isinstance(prediction, (int, float, np.integer, np.floating)) else None
+    return {
+        "model": model_name,
+        "prediction": str(prediction),
+        "confidence": format_percent(confidence) if probabilities else "n/a",
+        "explanation_target": target_output if target_output is not None else "prediction",
+        "target_value": format_metric(target_value),
+    }, probabilities
+
+
+def coerce_like_reference(data: Any, columns: list[str], reference: pd.DataFrame) -> pd.DataFrame:
+    frame = pd.DataFrame(data, columns=columns)
+    for column in columns:
+        if column in reference.columns and pd.api.types.is_numeric_dtype(reference[column]):
+            frame[column] = pd.to_numeric(frame[column], errors="coerce")
+    return frame
+
+
+def shap_background_data(training_data: pd.DataFrame, feature_columns: list[str], target: str | None) -> pd.DataFrame:
+    if training_data.empty:
+        return pd.DataFrame()
+    candidates = training_data.drop(columns=[target], errors="ignore")
+    missing_columns = [column for column in feature_columns if column not in candidates.columns]
+    if missing_columns:
+        return pd.DataFrame()
+    background = candidates[feature_columns].dropna(how="all")
+    if background.empty:
+        return pd.DataFrame()
+    sample_size = min(50, len(background))
+    return background.sample(n=sample_size, random_state=42) if len(background) > sample_size else background
+
+
+def shap_values_for_model(
+    predictor: Any,
+    model_name: str,
+    features: pd.DataFrame,
+    background: pd.DataFrame,
+    task_type: str,
+    target_output: str | None,
+) -> np.ndarray:
+    try:
+        import shap
+    except ImportError as exc:
+        raise ImportError(
+            "SHAP이 설치되어 있지 않습니다. `pip install -r requirements-automl.txt` 후 다시 실행하세요."
+        ) from exc
+
+    feature_columns = features.columns.tolist()
+
+    def model_output(batch: Any) -> np.ndarray:
+        batch_df = coerce_like_reference(batch, feature_columns, background)
+        if task_type == "regression":
+            return np.asarray(predictor.predict(batch_df, model=model_name), dtype=float)
+
+        probabilities = predictor.predict_proba(batch_df, model=model_name, as_multiclass=True)
+        if isinstance(probabilities, pd.Series):
+            return probabilities.to_numpy(dtype=float)
+        if isinstance(probabilities, pd.DataFrame):
+            if target_output in probabilities.columns:
+                return probabilities[target_output].to_numpy(dtype=float)
+            string_lookup = {str(column): column for column in probabilities.columns}
+            if target_output in string_lookup:
+                return probabilities[string_lookup[target_output]].to_numpy(dtype=float)
+            return probabilities.iloc[:, 0].to_numpy(dtype=float)
+        array = np.asarray(probabilities, dtype=float)
+        if array.ndim == 1:
+            return array
+        return array[:, 0]
+
+    explainer = shap.KernelExplainer(model_output, background)
+    try:
+        raw_values = explainer.shap_values(features, nsamples=100, silent=True)
+    except TypeError:
+        raw_values = explainer.shap_values(features, nsamples=100)
+    if isinstance(raw_values, list):
+        raw_values = raw_values[0]
+    values = np.asarray(raw_values)
+    while values.ndim > 1:
+        values = values[0]
+    return values.astype(float)
+
+
+def shap_table(feature_columns: list[str], values: np.ndarray, sample: pd.DataFrame) -> pd.DataFrame:
+    rows = []
+    for feature, shap_value in zip(feature_columns, values):
+        rows.append(
+            {
+                "feature": feature,
+                "input_value": sample.iloc[0][feature],
+                "shap_value": float(shap_value),
+                "direction": "increases target output" if shap_value >= 0 else "decreases target output",
+                "abs_shap": abs(float(shap_value)),
+            }
+        )
+    return pd.DataFrame(rows).sort_values("abs_shap", ascending=False)
+
+
+def render_autogluon_local_explanation(
+    record: dict[str, Any],
+    predictor: Any,
+    config: dict[str, Any],
+    training_data: pd.DataFrame,
+    feature_columns: list[str],
+    features: pd.DataFrame,
+) -> None:
+    if not is_automl_record(record):
+        return
+
+    st.divider()
+    st.subheader("Local Explanation")
+    st.caption(
+        "입력한 1개 row를 AutoGluon 내부 모델 2개에 넣고 SHAP으로 비교합니다. "
+        "이 값은 모델 판단의 근거 후보이며 인과 설명은 아닙니다."
+    )
+
+    leaderboard = load_csv_artifact(record.get("leaderboard_path"))
+    model_names = autogluon_model_names(predictor, leaderboard)
+    if len(model_names) < 2:
+        st.info("AutoGluon 내부 모델이 2개 이상 있을 때 local explanation을 비교할 수 있습니다.")
+        return
+
+    default_models = model_names[:2]
+    selected_models = st.multiselect(
+        "Compare AutoGluon models",
+        options=model_names,
+        default=default_models,
+        key=f"local_explanation_models_{record.get('run_id')}",
+    )
+    if len(selected_models) != 2:
+        st.info("비교할 AutoGluon 모델을 정확히 2개 선택하세요.")
+        return
+
+    target = target_column(config)
+    background = shap_background_data(training_data, feature_columns, target)
+    if background.empty:
+        st.info("SHAP background data를 만들 수 없습니다. run config의 processed CSV와 feature columns를 확인하세요.")
+        return
+
+    task_type = str(record.get("task_type") or "classification")
+    positive_class = str(record.get("positive_class") or "") or None
+
+    if not st.button("Run local explanation", use_container_width=True):
+        return
+
+    comparison_rows = []
+    model_payloads = []
+    for model_name in selected_models:
+        try:
+            prediction_row, probabilities = autogluon_prediction_row(
+                predictor,
+                features,
+                model_name,
+                task_type,
+                positive_class,
+            )
+            comparison_rows.append(prediction_row)
+            model_payloads.append((model_name, prediction_row, probabilities))
+        except Exception as exc:  # noqa: BLE001
+            comparison_rows.append({
+                "model": model_name,
+                "prediction": "error",
+                "confidence": "n/a",
+                "explanation_target": "n/a",
+                "target_value": "n/a",
+                "error": str(exc),
+            })
+
+    st.markdown("#### Model Responses")
+    st.dataframe(pd.DataFrame(comparison_rows), use_container_width=True, hide_index=True)
+
+    columns = st.columns(2)
+    for column, (model_name, prediction_row, _) in zip(columns, model_payloads):
+        with column:
+            st.markdown(f"#### {model_name}")
+            try:
+                with st.spinner("Computing SHAP values..."):
+                    values = shap_values_for_model(
+                        predictor=predictor,
+                        model_name=model_name,
+                        features=features,
+                        background=background,
+                        task_type=task_type,
+                        target_output=prediction_row.get("explanation_target"),
+                    )
+                explanation = shap_table(feature_columns, values, features).head(10)
+                st.caption(
+                    f"target={prediction_row.get('explanation_target')} · "
+                    f"value={prediction_row.get('target_value')}"
+                )
+                st.bar_chart(explanation.set_index("feature")[["shap_value"]])
+                st.dataframe(
+                    explanation[["feature", "input_value", "shap_value", "direction"]],
+                    use_container_width=True,
+                    hide_index=True,
+                )
+            except Exception as exc:  # noqa: BLE001
+                st.error(f"SHAP 계산 실패: {exc}")
 
 
 def input_summary(values: dict[str, Any]) -> str:
@@ -486,15 +830,27 @@ def render_metric_summary(record: dict[str, Any], metrics: dict[str, Any]) -> No
 
     with val_col:
         st.markdown("#### Model Selection Metric (Validation)")
-        c1, c2 = st.columns(2)
-        c1.metric("Accuracy", format_metric(metric_values.get("accuracy")))
-        c2.metric("Macro F1", format_metric(metric_values.get("macro_f1")))
+        display_metrics = {key: value for key, value in metric_values.items() if isinstance(value, (int, float))}
+        if display_metrics:
+            st.dataframe(
+                pd.DataFrame([{"metric": key, "value": format_metric(value)} for key, value in display_metrics.items()]),
+                use_container_width=True,
+                hide_index=True,
+            )
+        else:
+            st.info("validation metric이 없습니다.")
 
     with test_col:
         st.markdown("#### Final Check Metric (Test)")
-        c1, c2 = st.columns(2)
-        c1.metric("Accuracy", format_metric(test_metric_values.get("accuracy")))
-        c2.metric("Macro F1", format_metric(test_metric_values.get("macro_f1")))
+        display_metrics = {key: value for key, value in test_metric_values.items() if isinstance(value, (int, float))}
+        if display_metrics:
+            st.dataframe(
+                pd.DataFrame([{"metric": key, "value": format_metric(value)} for key, value in display_metrics.items()]),
+                use_container_width=True,
+                hide_index=True,
+            )
+        else:
+            st.info("test metric이 없습니다.")
 
     report_df = class_report_dataframe(metrics)
     if report_df.empty:
@@ -502,6 +858,137 @@ def render_metric_summary(record: dict[str, Any], metrics: dict[str, Any]) -> No
     else:
         st.markdown("#### Validation Classification Report")
         st.dataframe(report_df, use_container_width=True, hide_index=True)
+
+
+def render_overview_tab(record: dict[str, Any], best_record: dict[str, Any] | None, primary_metric: str) -> None:
+    st.subheader("Run Overview")
+    config = load_run_config(record.get("experiment_path", ""))
+    data_config = run_data_config(config)
+    data = load_training_data(data_config.get("path"))
+    target = target_column(config) or data_config.get("target_column") or "n/a"
+    summary = load_automl_summary(record.get("automl_summary_path"))
+
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Task", str(record.get("task_type") or summary.get("task_type") or "classification"))
+    c2.metric("Experiment", str(record.get("experiment_type") or "baseline"))
+    c3.metric("Primary Metric", str(record.get("primary_metric") or primary_metric))
+    c4.metric("Data Version", str(record.get("data_version") or "n/a"))
+
+    split = summary.get("split") if summary else {}
+    if not split:
+        split = config.get("data", {}).get("split", {}) if isinstance(config.get("data"), dict) else {}
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Target", str(target))
+    c2.metric("Train Rows", split.get("train_rows", "n/a"))
+    c3.metric("Validation Rows", split.get("val_rows", "n/a"))
+    c4.metric("Test Rows", split.get("test_rows", "n/a"))
+
+    if same_record(record, best_record):
+        st.success(f"Current best by validation {primary_metric}.")
+    elif best_record is not None:
+        st.info(f"Current best: {short_id(best_record.get('model_id'))}")
+
+    if not data.empty:
+        feature_columns = [column for column in data.columns if column != target]
+        numeric_count = int(data[feature_columns].select_dtypes(include=["number"]).shape[1]) if feature_columns else 0
+        categorical_count = max(len(feature_columns) - numeric_count, 0)
+        missing_rate = float(data[feature_columns].isna().mean().mean()) if feature_columns else 0.0
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Features", len(feature_columns))
+        c2.metric("Numeric / Categorical", f"{numeric_count} / {categorical_count}")
+        c3.metric("Mean Missing Rate", format_percent(missing_rate))
+
+        if target in data.columns and str(record.get("task_type") or "classification") == "classification":
+            st.markdown("#### Class Distribution")
+            distribution = data[target].value_counts(dropna=False).rename_axis("class").reset_index(name="count")
+            st.dataframe(distribution, use_container_width=True, hide_index=True)
+
+    if summary:
+        st.markdown("#### AutoGluon Summary")
+        st.json(summary, expanded=False)
+
+
+def render_leaderboard_tab(
+    registry: list[dict[str, Any]],
+    record: dict[str, Any],
+    best_record: dict[str, Any] | None,
+    baseline: dict[str, Any] | None,
+    primary_metric: str,
+) -> None:
+    st.subheader("Model Leaderboard")
+    leaderboard = load_csv_artifact(record.get("leaderboard_path"))
+    if not leaderboard.empty:
+        st.dataframe(leaderboard, use_container_width=True, hide_index=True)
+        st.caption("AutoGluon leaderboard는 test data로 최종 확인한 후보 모델 비교표입니다.")
+        return
+
+    registry_df = registry_to_dataframe(registry, primary_metric, best_record, baseline)
+    if registry_df.empty:
+        st.info("비교할 registry record가 없습니다.")
+        return
+
+    st.dataframe(registry_df, use_container_width=True, hide_index=True)
+    trend_source = registry_trend_dataframe(registry)
+    trend_cols = [col for col in ["val_accuracy", "val_macro_f1"] if col in trend_source.columns]
+    if trend_cols and len(trend_source) > 1:
+        st.line_chart(trend_source.set_index("created_at")[trend_cols])
+
+
+def render_threshold_section(record: dict[str, Any]) -> None:
+    threshold_df = load_csv_artifact(record.get("threshold_metrics_path"))
+    if threshold_df.empty:
+        return
+
+    st.subheader("Threshold Tuning (Validation)")
+    threshold_values = threshold_df["threshold"].astype(float).tolist()
+    selected_threshold = st.slider("Threshold", 0.0, 1.0, 0.5, 0.01, key="evaluation_threshold")
+    nearest_threshold = min(threshold_values, key=lambda value: abs(value - selected_threshold))
+    threshold_float = threshold_df["threshold"].astype(float)
+    row = threshold_df.loc[(threshold_float - nearest_threshold).abs().idxmin()]
+
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Precision", format_metric(row.get("precision")))
+    c2.metric("Recall", format_metric(row.get("recall")))
+    c3.metric("F1", format_metric(row.get("f1")))
+    c4.metric("Threshold", f"{float(row.get('threshold')):.2f}")
+
+    counts = pd.DataFrame([
+        {"count": "TP", "value": int(row.get("tp", 0))},
+        {"count": "FP", "value": int(row.get("fp", 0))},
+        {"count": "TN", "value": int(row.get("tn", 0))},
+        {"count": "FN", "value": int(row.get("fn", 0))},
+    ])
+    st.dataframe(counts, use_container_width=True, hide_index=True)
+    with st.expander("All threshold metrics"):
+        st.dataframe(threshold_df, use_container_width=True, hide_index=True)
+
+
+def render_evaluation_tab(record: dict[str, Any]) -> None:
+    st.subheader("Selected Run")
+    with st.expander("Full run metadata"):
+        st.write(f"model_id: `{record.get('model_id')}`")
+        st.write(f"run_id: `{record.get('run_id')}`")
+        st.write(f"experiment_type: `{record.get('experiment_type', 'baseline')}`")
+        st.write(f"backend: `{record.get('backend', 'sklearn')}`")
+        st.write(f"data_version: `{record.get('data_version')}`")
+        st.write(f"artifact_path: `{record.get('artifact_path')}`")
+        st.write(f"experiment_path: `{record.get('experiment_path')}`")
+
+    metrics = load_metrics(record.get("experiment_path", ""))
+    render_metric_summary(record, metrics)
+    render_threshold_section(record)
+
+    if record.get("task_type", "classification") != "classification":
+        return
+
+    st.subheader("Validation Confusion Matrix")
+    confusion = load_confusion_matrix(record.get("confusion_matrix_path", ""))
+    cm_df = confusion_matrix_dataframe(confusion)
+    if cm_df.empty:
+        st.info("confusion_matrix.json을 찾을 수 없습니다.")
+    else:
+        st.dataframe(cm_df, use_container_width=True)
+        st.caption(confusion.get("format", "rows=true_label, columns=predicted_label"))
 
 
 def render_predict_tab(
@@ -536,7 +1023,7 @@ def render_predict_tab(
     training_data = load_training_data(data_config.get("path"))
 
     try:
-        model = load_model(artifact_path)
+        model = load_autogluon_model(artifact_path) if is_automl_record(record) else load_model(artifact_path)
     except Exception as exc:  # noqa: BLE001
         st.error(f"모델 로드 실패: {exc}")
         return
@@ -563,16 +1050,21 @@ def render_predict_tab(
                 values[column] = render_feature_input(column, training_data)
         submitted = st.form_submit_button("Run prediction", use_container_width=True)
 
-    if not submitted:
+    prediction_state_key = f"prediction_values_{record.get('run_id')}"
+    if submitted:
+        st.session_state[prediction_state_key] = values
+    active_values = st.session_state.get(prediction_state_key)
+
+    if active_values is None:
         return
 
     logger = InferenceLogger(log_path=str(LOG_PATH))
     start = time.perf_counter()
-    summary = input_summary(values)
+    summary = input_summary(active_values)
 
     try:
-        features = pd.DataFrame([values], columns=feature_columns)
-        prediction = model.predict(features)[0]
+        features = pd.DataFrame([active_values], columns=feature_columns)
+        prediction = first_prediction_value(model.predict(features))
         probabilities = prediction_probabilities(model, features)
         latency_ms = (time.perf_counter() - start) * 1000
 
@@ -581,6 +1073,8 @@ def render_predict_tab(
 
         st.divider()
         st.subheader("Prediction Result")
+        if not submitted:
+            st.caption("마지막으로 제출한 입력값 기준 결과입니다.")
         result_col1, result_col2, result_col3 = st.columns(3)
         result_col1.metric("Predicted label", prediction_key)
         result_col2.metric("Confidence", format_percent(confidence))
@@ -599,30 +1093,52 @@ def render_predict_tab(
             )
             st.dataframe(probability_df[["class", "probability_%"]], use_container_width=True, hide_index=True)
             st.bar_chart(probability_df.set_index("class")[["probability"]])
+
+            threshold_df = load_csv_artifact(record.get("threshold_metrics_path"))
+            positive_class = str(record.get("positive_class") or "")
+            if not threshold_df.empty and positive_class in probabilities:
+                threshold = st.slider("Decision threshold", 0.0, 1.0, 0.5, 0.01)
+                negative_class = next((label for label in probabilities if label != positive_class), prediction_key)
+                threshold_prediction = positive_class if probabilities[positive_class] >= threshold else negative_class
+                st.caption(
+                    f"threshold={threshold:.2f} 기준 label={threshold_prediction} "
+                    f"(positive probability={format_percent(probabilities[positive_class])})"
+                )
         st.caption(f"model_id={short_id(record.get('model_id'))} / run_id={short_id(record.get('run_id'))}")
 
-        logger.log(
-            input_summary=summary,
-            prediction=prediction_key,
-            latency_ms=latency_ms,
-            model_id=record.get("model_id"),
-            run_id=record.get("run_id"),
-            probability=round(probabilities.get(prediction_key), 6) if probabilities else None,
-            error_message="",
+        render_autogluon_local_explanation(
+            record=record,
+            predictor=model,
+            config=config,
+            training_data=training_data,
+            feature_columns=feature_columns,
+            features=features,
         )
-        st.cache_data.clear()
+
+        if submitted:
+            logger.log(
+                input_summary=summary,
+                prediction=prediction_key,
+                latency_ms=latency_ms,
+                model_id=record.get("model_id"),
+                run_id=record.get("run_id"),
+                probability=round(probabilities.get(prediction_key), 6) if probabilities else None,
+                error_message="",
+            )
+            st.cache_data.clear()
     except Exception as exc:  # noqa: BLE001
         latency_ms = (time.perf_counter() - start) * 1000
-        logger.log(
-            input_summary=summary,
-            prediction=None,
-            latency_ms=latency_ms,
-            status="error",
-            model_id=record.get("model_id"),
-            run_id=record.get("run_id"),
-            probability=None,
-            error_message=str(exc),
-        )
+        if submitted:
+            logger.log(
+                input_summary=summary,
+                prediction=None,
+                latency_ms=latency_ms,
+                status="error",
+                model_id=record.get("model_id"),
+                run_id=record.get("run_id"),
+                probability=None,
+                error_message=str(exc),
+            )
         st.error(f"예측 실패: {exc}")
 
 
@@ -668,7 +1184,7 @@ def render_logs_tab() -> None:
     st.subheader("Inference Logs")
     logs = load_logs()
     if logs.empty:
-        st.info("아직 추론 로그가 없습니다. Predict 탭에서 예측을 실행하면 logs/inference.jsonl에 기록됩니다.")
+        st.info("아직 추론 로그가 없습니다. Prediction 탭에서 예측을 실행하면 logs/inference.jsonl에 기록됩니다.")
         return
 
     total = len(logs)
@@ -726,7 +1242,7 @@ def render_logs_tab() -> None:
 def main() -> None:
     st.set_page_config(page_title="ML Experiment Dashboard", layout="wide")
     st.title("ML Experiment Dashboard")
-    st.caption("탭형 데이터 모델의 예측, validation/test metric, 추론 로그를 한 화면에서 확인합니다.")
+    st.caption("baseline과 AutoGluon Tabular 실험의 metric, leaderboard, threshold, 예측 로그를 확인합니다.")
 
     registry = load_registry()
     if not registry:
@@ -757,8 +1273,8 @@ def main() -> None:
     st.sidebar.markdown("### Selected Metrics")
     val_metrics = selected_record.get("metrics", {})
     test_metrics = selected_record.get("test_metrics", {})
-    st.sidebar.metric("Val Macro F1", format_metric(val_metrics.get("macro_f1")))
-    st.sidebar.metric("Test Macro F1", format_metric(test_metrics.get("macro_f1")))
+    st.sidebar.metric(f"Val {primary_metric}", format_metric(val_metrics.get(primary_metric)))
+    st.sidebar.metric(f"Test {primary_metric}", format_metric(test_metrics.get(primary_metric)))
     st.sidebar.caption(f"data_version: `{selected_record.get('data_version')}`")
 
     with st.sidebar.expander("Full IDs"):
@@ -766,11 +1282,17 @@ def main() -> None:
         st.write(f"run_id: `{selected_record.get('run_id')}`")
         st.write(f"primary_metric: `{selected_record.get('primary_metric')}`")
 
-    predict_tab, experiments_tab, logs_tab = st.tabs(["Predict", "Experiments", "Logs"])
-    with predict_tab:
+    overview_tab, leaderboard_tab, evaluation_tab, prediction_tab, logs_tab = st.tabs(
+        ["Overview", "Leaderboard", "Evaluation", "Prediction", "Logs"]
+    )
+    with overview_tab:
+        render_overview_tab(selected_record, best_record, primary_metric)
+    with leaderboard_tab:
+        render_leaderboard_tab(comparison_records, selected_record, best_record, baseline, primary_metric)
+    with evaluation_tab:
+        render_evaluation_tab(selected_record)
+    with prediction_tab:
         render_predict_tab(selected_record, best_record, primary_metric)
-    with experiments_tab:
-        render_experiments_tab(comparison_records, selected_record, best_record, baseline, primary_metric)
     with logs_tab:
         render_logs_tab()
 
