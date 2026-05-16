@@ -151,6 +151,21 @@ def metric_delta(record: dict[str, Any], baseline: dict[str, Any] | None, primar
     return value - baseline_value
 
 
+def test_metric_value(record: dict[str, Any], metric_name: str) -> float | None:
+    value = record.get("test_metrics", {}).get(metric_name)
+    if isinstance(value, (int, float)) and pd.notna(value):
+        return float(value)
+    return None
+
+
+def validation_test_gap(record: dict[str, Any], primary_metric: str) -> float | None:
+    validation_value = validation_metric_value(record, primary_metric)
+    test_value = test_metric_value(record, primary_metric)
+    if validation_value is None or test_value is None:
+        return None
+    return abs(validation_value - test_value)
+
+
 def default_selected_index(registry: list[dict[str, Any]]) -> int:
     latest = registry[-1] if registry else None
     if latest is None:
@@ -232,6 +247,74 @@ def load_automl_summary(path: str | None) -> dict[str, Any]:
         return {}
     summary = read_json(resolved, {})
     return summary if isinstance(summary, dict) else {}
+
+
+def selected_automl_model(record: dict[str, Any], summary: dict[str, Any]) -> str:
+    return str(summary.get("selected_model") or record.get("model_name") or "n/a")
+
+
+def automl_model_options(predictor: Any, leaderboard: pd.DataFrame, selected_model: str) -> list[str]:
+    names = autogluon_model_names(predictor, leaderboard)
+    options = [name for name in [selected_model, *names] if name and name != "n/a"]
+    return list(dict.fromkeys(options))
+
+
+def automl_metric_rows(record: dict[str, Any], baseline: dict[str, Any] | None, primary_metric: str) -> pd.DataFrame:
+    rows = [
+        {
+            "item": f"validation {primary_metric}",
+            "value": format_metric(validation_metric_value(record, primary_metric)),
+            "meaning": "model selection 기준",
+        },
+        {
+            "item": f"test {primary_metric}",
+            "value": format_metric(test_metric_value(record, primary_metric)),
+            "meaning": "최종 확인용",
+        },
+        {
+            "item": "delta vs baseline",
+            "value": format_delta(metric_delta(record, baseline, primary_metric)),
+            "meaning": "같은 data_version 기준",
+        },
+        {
+            "item": "validation-test gap",
+            "value": format_metric(validation_test_gap(record, primary_metric)),
+            "meaning": "작을수록 안정적",
+        },
+    ]
+    return pd.DataFrame(rows)
+
+
+def automl_display_leaderboard(leaderboard: pd.DataFrame) -> pd.DataFrame:
+    if leaderboard.empty:
+        return pd.DataFrame()
+    column_map = {
+        "model": "model",
+        "score_val": "validation_score",
+        "score_test": "test_score",
+        "eval_metric": "eval_metric",
+        "fit_time": "fit_time_s",
+        "pred_time_val": "val_pred_time_s",
+        "pred_time_test": "test_pred_time_s",
+    }
+    columns = [column for column in column_map if column in leaderboard.columns]
+    display_df = leaderboard[columns].rename(columns=column_map).copy()
+    for column in display_df.columns:
+        if column != "model" and pd.api.types.is_numeric_dtype(display_df[column]):
+            display_df[column] = display_df[column].round(4)
+    return display_df
+
+
+def selected_leaderboard_row(
+    leaderboard: pd.DataFrame,
+    selected_model: str,
+) -> pd.Series | None:
+    if leaderboard.empty or "model" not in leaderboard.columns:
+        return None
+    matches = leaderboard[leaderboard["model"].astype(str) == selected_model]
+    if not matches.empty:
+        return matches.iloc[0]
+    return leaderboard.iloc[0]
 
 
 @st.cache_resource
@@ -521,10 +604,20 @@ def render_feature_input(column: str, data: pd.DataFrame) -> Any:
     return st.text_input(column, value="")
 
 
-def prediction_probabilities(model: Any, features: pd.DataFrame) -> dict[str, float]:
+def prediction_probabilities(
+    model: Any,
+    features: pd.DataFrame,
+    model_name: str | None = None,
+) -> dict[str, float]:
     if not hasattr(model, "predict_proba"):
         return {}
-    probabilities = model.predict_proba(features)
+    if model_name:
+        try:
+            probabilities = model.predict_proba(features, model=model_name, as_multiclass=True)
+        except TypeError:
+            probabilities = model.predict_proba(features, model=model_name)
+    else:
+        probabilities = model.predict_proba(features)
 
     if isinstance(probabilities, pd.DataFrame):
         first_row = probabilities.iloc[0]
@@ -546,6 +639,15 @@ def prediction_probabilities(model: Any, features: pd.DataFrame) -> dict[str, fl
     probabilities_array = probabilities[0]
     classes = [str(value) for value in getattr(model, "classes_", [])]
     return {class_label: float(probabilities_array[index]) for index, class_label in enumerate(classes)}
+
+
+def prediction_value(model: Any, features: pd.DataFrame, model_name: str | None = None) -> Any:
+    if model_name:
+        try:
+            return first_prediction_value(model.predict(features, model=model_name))
+        except TypeError:
+            return first_prediction_value(model.predict(features))
+    return first_prediction_value(model.predict(features))
 
 
 def first_prediction_value(prediction: Any) -> Any:
@@ -860,7 +962,56 @@ def render_metric_summary(record: dict[str, Any], metrics: dict[str, Any]) -> No
         st.dataframe(report_df, use_container_width=True, hide_index=True)
 
 
-def render_overview_tab(record: dict[str, Any], best_record: dict[str, Any] | None, primary_metric: str) -> None:
+def render_automl_overview(
+    record: dict[str, Any],
+    baseline: dict[str, Any] | None,
+    primary_metric: str,
+    summary: dict[str, Any],
+) -> None:
+    selected_model = selected_automl_model(record, summary)
+    leaderboard = load_csv_artifact(record.get("leaderboard_path"))
+    selected_row = selected_leaderboard_row(leaderboard, selected_model)
+
+    st.markdown("#### AutoML Result")
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Selected Model", short_id(selected_model, prefix=18, suffix=8))
+    c2.metric(f"Val {primary_metric}", format_metric(validation_metric_value(record, primary_metric)))
+    c3.metric(f"Test {primary_metric}", format_metric(test_metric_value(record, primary_metric)))
+    c4.metric("Δ vs Baseline", format_delta(metric_delta(record, baseline, primary_metric)))
+    st.caption(
+        "AutoGluon은 여러 전처리/모델 pipeline 후보를 같은 data_version과 split 조건에서 비교합니다. "
+        "Validation metric은 모델 선택 기준이고, test metric은 최종 확인용입니다."
+    )
+
+    st.dataframe(automl_metric_rows(record, baseline, primary_metric), use_container_width=True, hide_index=True)
+
+    if selected_row is not None and not leaderboard.empty:
+        detail_rows = []
+        for source, label in [
+            ("eval_metric", "AutoGluon eval metric"),
+            ("score_val", "Leaderboard validation score"),
+            ("score_test", "Leaderboard test score"),
+            ("fit_time", "Fit time (s)"),
+            ("pred_time_val", "Validation prediction time (s)"),
+            ("pred_time_test", "Test prediction time (s)"),
+        ]:
+            if source in selected_row:
+                value = selected_row.get(source)
+                detail_rows.append({
+                    "field": label,
+                    "value": format_metric(value) if isinstance(value, (int, float)) else str(value),
+                })
+        if detail_rows:
+            with st.expander("Selected AutoGluon model details"):
+                st.dataframe(pd.DataFrame(detail_rows), use_container_width=True, hide_index=True)
+
+
+def render_overview_tab(
+    record: dict[str, Any],
+    best_record: dict[str, Any] | None,
+    baseline: dict[str, Any] | None,
+    primary_metric: str,
+) -> None:
     st.subheader("Run Overview")
     config = load_run_config(record.get("experiment_path", ""))
     data_config = run_data_config(config)
@@ -888,6 +1039,9 @@ def render_overview_tab(record: dict[str, Any], best_record: dict[str, Any] | No
     elif best_record is not None:
         st.info(f"Current best: {short_id(best_record.get('model_id'))}")
 
+    if is_automl_record(record):
+        render_automl_overview(record, baseline, primary_metric, summary)
+
     if not data.empty:
         feature_columns = [column for column in data.columns if column != target]
         numeric_count = int(data[feature_columns].select_dtypes(include=["number"]).shape[1]) if feature_columns else 0
@@ -905,7 +1059,8 @@ def render_overview_tab(record: dict[str, Any], best_record: dict[str, Any] | No
 
     if summary:
         st.markdown("#### AutoGluon Summary")
-        st.json(summary, expanded=False)
+        with st.expander("Raw AutoGluon summary JSON"):
+            st.json(summary, expanded=False)
 
 
 def render_leaderboard_tab(
@@ -915,11 +1070,40 @@ def render_leaderboard_tab(
     baseline: dict[str, Any] | None,
     primary_metric: str,
 ) -> None:
-    st.subheader("Model Leaderboard")
+    title = "AutoGluon Candidate Leaderboard" if is_automl_record(record) else "Model Leaderboard"
+    st.subheader(title)
     leaderboard = load_csv_artifact(record.get("leaderboard_path"))
     if not leaderboard.empty:
-        st.dataframe(leaderboard, use_container_width=True, hide_index=True)
-        st.caption("AutoGluon leaderboard는 test data로 최종 확인한 후보 모델 비교표입니다.")
+        summary = load_automl_summary(record.get("automl_summary_path"))
+        selected_model = selected_automl_model(record, summary)
+        selected_row = selected_leaderboard_row(leaderboard, selected_model)
+        display_df = automl_display_leaderboard(leaderboard)
+
+        if selected_row is not None:
+            c1, c2, c3, c4 = st.columns(4)
+            c1.metric("Selected Model", short_id(selected_model, prefix=18, suffix=8))
+            c2.metric("Leaderboard Rows", len(leaderboard))
+            c3.metric("Validation Score", format_metric(selected_row.get("score_val")))
+            c4.metric("Test Score", format_metric(selected_row.get("score_test")))
+
+        st.caption(
+            "이 표는 AutoGluon이 비교한 후보 pipeline입니다. "
+            "validation_score는 모델 선택 맥락, test_score는 최종 확인 맥락으로 읽습니다."
+        )
+        if not display_df.empty:
+            st.dataframe(display_df, use_container_width=True, hide_index=True)
+
+            score_columns = [
+                column for column in ["validation_score", "test_score"]
+                if column in display_df.columns and pd.api.types.is_numeric_dtype(display_df[column])
+            ]
+            if "model" in display_df.columns and score_columns:
+                st.markdown("#### Top Candidate Scores")
+                chart_df = display_df.head(10).set_index("model")[score_columns]
+                st.bar_chart(chart_df)
+
+        with st.expander("Full AutoGluon leaderboard"):
+            st.dataframe(leaderboard, use_container_width=True, hide_index=True)
         return
 
     registry_df = registry_to_dataframe(registry, primary_metric, best_record, baseline)
@@ -1039,6 +1223,34 @@ def render_predict_tab(
     c2.metric("Numeric", numeric_features)
     c3.metric("Categorical", categorical_features)
 
+    prediction_model_name = None
+    if is_automl_record(record):
+        summary = load_automl_summary(record.get("automl_summary_path"))
+        leaderboard = load_csv_artifact(record.get("leaderboard_path"))
+        selected_model = selected_automl_model(record, summary)
+        model_options = automl_model_options(model, leaderboard, selected_model)
+        if model_options:
+            default_index = model_options.index(selected_model) if selected_model in model_options else 0
+            prediction_model_name = st.selectbox(
+                "Prediction model",
+                options=model_options,
+                index=default_index,
+                key=f"prediction_model_{record.get('run_id')}",
+                help=(
+                    "기본값은 AutoGluon이 validation metric으로 선택한 모델입니다. "
+                    "WeightedEnsemble 계열은 내부 base model을 함께 호출할 수 있어 더 느릴 수 있습니다."
+                ),
+            )
+            selected_row = selected_leaderboard_row(leaderboard, prediction_model_name)
+            if selected_row is not None:
+                st.caption(
+                    f"selected={prediction_model_name} · "
+                    f"validation_score={format_metric(selected_row.get('score_val'))} · "
+                    f"test_score={format_metric(selected_row.get('score_test'))}"
+                )
+        else:
+            st.info("AutoGluon 내부 모델 목록을 찾지 못해 기본 predictor로 예측합니다.")
+
     with st.expander("Feature columns"):
         st.dataframe(feature_details_dataframe(feature_columns, training_data), use_container_width=True, hide_index=True)
 
@@ -1064,8 +1276,8 @@ def render_predict_tab(
 
     try:
         features = pd.DataFrame([active_values], columns=feature_columns)
-        prediction = first_prediction_value(model.predict(features))
-        probabilities = prediction_probabilities(model, features)
+        prediction = prediction_value(model, features, prediction_model_name)
+        probabilities = prediction_probabilities(model, features, prediction_model_name)
         latency_ms = (time.perf_counter() - start) * 1000
 
         prediction_key = str(prediction)
@@ -1079,6 +1291,8 @@ def render_predict_tab(
         result_col1.metric("Predicted label", prediction_key)
         result_col2.metric("Confidence", format_percent(confidence))
         result_col3.metric("Latency", f"{latency_ms:.1f} ms")
+        if prediction_model_name:
+            st.caption(f"AutoGluon prediction model: `{prediction_model_name}`")
 
         if probabilities:
             probability_df = pd.DataFrame(
@@ -1122,10 +1336,14 @@ def render_predict_tab(
                 latency_ms=latency_ms,
                 model_id=record.get("model_id"),
                 run_id=record.get("run_id"),
+                autogluon_model=prediction_model_name,
                 probability=round(probabilities.get(prediction_key), 6) if probabilities else None,
                 error_message="",
             )
-            st.cache_data.clear()
+            try:
+                load_logs.clear()
+            except Exception:  # noqa: BLE001
+                pass
     except Exception as exc:  # noqa: BLE001
         latency_ms = (time.perf_counter() - start) * 1000
         if submitted:
@@ -1286,7 +1504,7 @@ def main() -> None:
         ["Overview", "Leaderboard", "Evaluation", "Prediction", "Logs"]
     )
     with overview_tab:
-        render_overview_tab(selected_record, best_record, primary_metric)
+        render_overview_tab(selected_record, best_record, baseline, primary_metric)
     with leaderboard_tab:
         render_leaderboard_tab(comparison_records, selected_record, best_record, baseline, primary_metric)
     with evaluation_tab:
