@@ -5,6 +5,17 @@
 
 ---
 
+## 0. 환경 Preflight
+
+- [ ] `project-template/` 안에서 작업하고 있는가?
+- [ ] Python `3.10.x` 가상환경을 생성하고 활성화했는가?
+- [ ] `pip install -r requirements-automl.txt`로 AutoGluon 포함 전체 의존성을 설치했는가?
+- [ ] `python -c "import pandas, sklearn, streamlit; print('core OK')"`가 성공했는가?
+- [ ] `python -c "from autogluon.tabular import TabularPredictor; print('autogluon OK')"`가 성공했는가?
+- [ ] `python scripts/preprocess.py --help`, `python scripts/train.py --help`, `python scripts/train_automl.py --help`가 모두 실행되는가?
+
+---
+
 ## 1. 문제 정의
 
 - [ ] `docs/specs/PROJECT_SPEC.md`를 확인했는가?
@@ -49,6 +60,7 @@
 - [ ] Streamlit 시각화를 위한 `confusion_matrix.json`이 run마다 저장되는가?
 - [ ] binary classification이면 `threshold_metrics.csv` 생성 여부를 확인했는가?
 - [ ] AutoGluon을 실행한다면 `/plan-automl`로 metric, split, leakage 제외 컬럼, 성공 기준을 먼저 고정했는가?
+- [ ] AutoGluon 실행 전에 `TabularPredictor` import가 성공하는지 확인했는가?
 - [ ] AutoGluon 결과를 전처리 + 모델 + 하이퍼파라미터 pipeline 비교로 해석했는가?
 - [ ] 실패한 실험도 기록했는가?
 
@@ -79,8 +91,10 @@
 ## 7. 재현성과 버전 관리
 
 - [ ] `CLAUDE.md`의 Claude Code 작업 기준을 확인했는가?
+- [ ] `.python-version`과 실제 가상환경의 Python 버전이 맞는가?
 - [ ] `python scripts/train.py --data ... --target ... --data-version ...` 실행 흐름이 유지되는가?
 - [ ] AutoGluon 사용 시 `python scripts/train_automl.py --data ... --target ... --data-version ...` 실행 흐름이 유지되는가?
+- [ ] baseline과 AutoGluon이 같은 processed CSV, target, split, seed, metric을 사용했는가?
 - [ ] seed, config, data_version, model_id가 실험마다 남는가?
 - [ ] 큰 데이터와 모델 파일은 Git에 올리지 않고 외부 링크나 경로만 기록했는가?
 - [ ] DVC/MLflow를 쓰지 않아도 기본 실험 추적이 가능한가?

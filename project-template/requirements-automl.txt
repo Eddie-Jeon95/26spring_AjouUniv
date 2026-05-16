@@ -1,9 +1,10 @@
 # AutoML 확장 의존성
-# 기본 requirements.txt는 가볍게 유지하고, AutoGluon 실험을 실행할 때만 설치합니다.
+# A-to-Z 전체 환경에서는 이 파일을 설치합니다.
+# 기본 requirements.txt는 AutoGluon 없이 가볍게 baseline만 확인할 때 사용합니다.
 
 -r requirements.txt
 
-# AutoGluon Tabular는 Python 3.10+ 환경을 전제로 합니다.
+# AutoGluon Tabular는 이 템플릿에서 Python 3.10.x 환경을 전제로 합니다.
 # 필요한 모델 후보와 optional dependency를 포함한 tabular 설치입니다.
 autogluon.tabular[all]==1.5.0
 

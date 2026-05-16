@@ -94,24 +94,183 @@ grep -r "hf_" .          # HuggingFace token 패턴
 
 ## Python / 패키지
 
-**Q. `pip install -r requirements.txt`가 오류나요.**
+**Q. 이 프로젝트는 어떤 Python 버전을 써야 하나요?**
+
+Python **3.10.x**를 기준으로 사용하세요. `project-template/.python-version`에는 `3.10.13`이 적혀 있습니다.
+AutoGluon까지 설치하는 A-to-Z 흐름은 Python 3.10 환경을 전제로 합니다.
+
+확인:
 
 ```bash
-# 가상환경 새로 만들기
-python -m venv venv
-source venv/bin/activate   # Windows: venv\Scripts\activate
+python3.10 --version
+```
 
-# 업그레이드 후 재설치
-pip install --upgrade pip
+가상환경 안에서는 아래처럼 확인합니다.
+
+```bash
+python --version
+```
+
+`Python 3.10.x`가 아니면 가상환경을 다시 만드세요.
+
+---
+
+**Q. `python3.10` 명령이 없어요.**
+
+macOS에서 `pyenv`를 쓴다면:
+
+```bash
+pyenv install 3.10.13
+pyenv local 3.10.13
+python --version
+```
+
+Windows에서는 Python 공식 설치 파일을 사용하거나 Python Launcher로 확인합니다.
+
+```powershell
+py -0p
+py -3.10 --version
+```
+
+Python 3.10을 설치한 뒤 가상환경을 다시 만듭니다.
+
+```powershell
+py -3.10 -m venv venv
+.\venv\Scripts\Activate.ps1
+```
+
+---
+
+**Q. `requirements.txt`와 `requirements-automl.txt`는 뭐가 다른가요?**
+
+`requirements.txt`는 EDA, baseline, Streamlit에 필요한 가벼운 기본 의존성입니다.
+`requirements-automl.txt`는 여기에 AutoGluon과 SHAP까지 포함한 전체 의존성입니다.
+
+이 템플릿의 A-to-Z 기본 설치는 AutoGluon까지 포함하므로 아래를 사용합니다.
+
+```bash
+pip install -r requirements-automl.txt
+```
+
+빠르게 baseline만 확인해야 할 때만 아래를 보조 선택지로 사용합니다.
+
+```bash
 pip install -r requirements.txt
 ```
 
-버전 충돌이 의심될 때:
+---
+
+**Q. `pip install -r requirements-automl.txt`가 오래 걸리거나 실패해요.**
+
+AutoGluon은 여러 tabular 모델 후보와 optional dependency를 설치하므로 시간이 오래 걸릴 수 있습니다. 먼저 아래를 확인하세요.
 
 ```bash
-pip install pipreqs
-pipreqs . --force   # 실제 import 기반으로 requirements.txt 재생성
+python --version
+python -m pip --version
 ```
+
+Python이 3.10.x가 아니면 가상환경을 지우고 다시 만듭니다.
+
+macOS / Linux:
+
+```bash
+deactivate  # 활성화되어 있을 때만
+rm -rf venv
+python3.10 -m venv venv
+source venv/bin/activate
+python -m pip install --upgrade pip
+pip install -r requirements-automl.txt
+```
+
+Windows PowerShell:
+
+```powershell
+deactivate
+Remove-Item -Recurse -Force venv
+py -3.10 -m venv venv
+.\venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+pip install -r requirements-automl.txt
+```
+
+설치가 끝난 뒤 아래로 확인합니다.
+
+```bash
+python -c "from autogluon.tabular import TabularPredictor; print('autogluon OK')"
+```
+
+---
+
+**Q. `pip install -r requirements.txt`도 오류나요.**
+
+기본 의존성도 실패하면 가상환경을 새로 만들고 pip를 업그레이드한 뒤 다시 설치합니다.
+
+```bash
+python3.10 -m venv venv
+source venv/bin/activate   # Windows PowerShell: .\venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+`pipreqs . --force`로 requirements를 재생성하지 마세요. 이 템플릿은 재현성을 위해 고정 버전 파일을 유지합니다.
+
+---
+
+**Q. `numpy.dtype size changed` 또는 pandas/numpy binary incompatibility 오류가 나요.**
+
+기존 전역 Python이나 오래된 venv에 서로 맞지 않는 pandas/numpy wheel이 섞였을 때 자주 납니다.
+해당 환경을 계속 고치기보다 Python 3.10 가상환경을 새로 만드는 것이 가장 빠릅니다.
+
+```bash
+deactivate
+rm -rf venv
+python3.10 -m venv venv
+source venv/bin/activate
+python -m pip install --upgrade pip
+pip install -r requirements-automl.txt
+python -c "import pandas, numpy; print('pandas/numpy OK')"
+```
+
+Windows PowerShell에서는 `rm -rf venv` 대신 아래를 사용합니다.
+
+```powershell
+Remove-Item -Recurse -Force venv
+```
+
+---
+
+**Q. Apple Silicon Mac에서 설치가 잘 안 됩니다.**
+
+먼저 Python 3.10 가상환경인지 확인합니다.
+
+```bash
+python --version
+```
+
+기존 venv가 다른 Python으로 만들어졌다면 삭제하고 다시 만드세요.
+
+```bash
+deactivate
+rm -rf venv
+python3.10 -m venv venv
+source venv/bin/activate
+python -m pip install --upgrade pip
+pip install -r requirements-automl.txt
+```
+
+AutoGluon 설치가 계속 실패하면, 일단 `requirements.txt`로 baseline까지 진행하고 설치 로그를 확인한 뒤 AutoML 단계에서 다시 해결합니다. 최종 A-to-Z 제출 전에는 `requirements-automl.txt` 설치와 `autogluon OK` 확인이 필요합니다.
+
+---
+
+**Q. Jupyter Notebook kernel은 어떻게 등록하나요?**
+
+가상환경을 활성화한 상태에서 한 번만 등록합니다.
+
+```bash
+python -m ipykernel install --user --name ml-project-venv --display-name "ML Project venv"
+```
+
+Notebook에서 kernel을 `"ML Project venv"`로 선택하세요.
 
 ---
 
@@ -138,10 +297,20 @@ model = load_model()
 
 주요 원인:
 1. **메모리 초과**: 모델이 1GB를 넘으면 Streamlit Cloud에서 실행 불가. HF Hub에 올리고 런타임에 다운로드하는 방식 사용
-2. **requirements.txt 오류**: 로컬에서 `pip install -r requirements.txt` 먼저 테스트
+2. **의존성 오류**: AutoGluon까지 쓰는 프로젝트라면 로컬에서 `pip install -r requirements-automl.txt` 먼저 테스트
 3. **secrets 누락**: `.streamlit/secrets.toml`이 배포 환경에 설정되어 있는지 확인 (Streamlit Cloud 설정 페이지에서 입력)
 
 Streamlit Cloud 로그 확인: 앱 페이지 우측 하단 "Manage app" → "Logs"
+
+---
+
+**Q. Streamlit 포트가 이미 사용 중이라고 나와요.**
+
+다른 포트로 실행합니다.
+
+```bash
+streamlit run streamlit_app.py --server.port 8502
+```
 
 ---
 
@@ -229,4 +398,5 @@ model = model.to(device)
 
 **Q. Python 버전이 달라서 문제가 생겨요.**
 
-`pyproject.toml`이나 `.python-version` 파일로 버전을 명시하거나, Docker를 사용하면 환경을 통일할 수 있습니다.
+이 템플릿은 `.python-version`으로 `3.10.13`을 명시합니다.
+다른 Python으로 만든 venv를 계속 쓰지 말고 Python 3.10으로 새 venv를 만든 뒤 `pip install -r requirements-automl.txt`를 다시 실행하세요.
