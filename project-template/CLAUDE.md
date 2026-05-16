@@ -52,8 +52,7 @@ python scripts/train_automl.py --help
 기준:
 
 - Python은 `3.10.x`를 사용합니다. `.python-version`의 기본값은 `3.10.13`입니다.
-- A-to-Z 기본 설치는 `pip install -r requirements-automl.txt`입니다.
-- 가벼운 baseline 확인만 할 때만 `pip install -r requirements.txt`를 보조 선택지로 안내합니다.
+- 의존성 설치는 `pip install -r requirements.txt` 하나로 통일합니다.
 - 패키지를 하나씩 최신 버전으로 설치하지 않습니다. 고정된 requirements 파일을 기준으로 재현성을 맞춥니다.
 - AutoGluon import가 실패하면 AutoML 실행 전에 환경 문제를 먼저 해결합니다.
 
@@ -117,6 +116,7 @@ logs/                 # 추론 로그, Git 제외
 - 학생에게 YAML 직접 수정을 요구하지 않습니다. raw 파일명, target, output, data_version은 대화나 slash command 인자로 받습니다.
 - EDA는 바로 실행하기보다 먼저 확인할 질문과 표/그래프를 짧게 계획한 뒤 notebook을 만들고 실행합니다.
 - `reports/DATA_CARD.md`는 EDA 이후에 데이터 품질, 누수 위험, 전처리 결정을 정리하는 산출물입니다.
+- EDA에서는 constant, near-constant, high-missing, ID-like, high-correlation feature를 점검하고 drop 후보와 근거를 Data Card에 남깁니다.
 - `data/processed/`에는 모델 학습용으로 정돈된 CSV를 저장합니다.
 - 컬럼명 정리, rename/drop, target mapping, 중복 제거, target 결측 제거는 `scripts/preprocess.py`에서 처리할 수 있습니다.
 - scaler, encoder, imputer처럼 fit이 필요한 변환은 processed 파일에 미리 반영하지 않고 train split 이후 pipeline에서 처리합니다.
@@ -153,7 +153,7 @@ logs/                 # 추론 로그, Git 제외
 
 - Claude가 만든 코드는 학생이 실행하고 이해한 뒤 반영합니다.
 - API key, 개인정보, 민감한 원본 샘플은 프롬프트에 넣지 않습니다.
-- 새 라이브러리는 꼭 필요한 경우에만 제안하고 관련 requirements 파일을 함께 갱신합니다. 이미 requirements에 있는 패키지는 `pip install -r requirements-automl.txt`로 설치하도록 안내하고, 특정 패키지를 최신 버전으로 따로 설치하지 않습니다.
+- 새 라이브러리는 꼭 필요한 경우에만 제안하고 `requirements.txt`를 함께 갱신합니다. 이미 requirements에 있는 패키지는 `pip install -r requirements.txt`로 설치하도록 안내하고, 특정 패키지를 최신 버전으로 따로 설치하지 않습니다.
 - 큰 작업은 계획 → 구현 → 실행 확인 → 문서 갱신 순서로 진행합니다.
 - 결과가 좋아 보여도 data leakage, split 변경, metric 선택 문제를 먼저 점검합니다.
 - 중복, 누수, 오류 원인을 말할 때는 반올림된 출력이나 row 번호만 근거로 단정하지 않고 실제 파일에서 exact duplicate, feature-only duplicate, split 정보를 확인합니다.

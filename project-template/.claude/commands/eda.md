@@ -42,6 +42,7 @@ $ARGUMENTS
 - target 분포:
 - 결측치 / 중복 / 이상치:
 - feature 타입:
+- feature redundancy / drop candidates:
 - 누수 의심:
 - split 방식 후보:
 ```
@@ -57,6 +58,11 @@ $ARGUMENTS
   - duplicate rows
   - numeric/category/text/date feature 타입 요약
   - 주요 numeric 분포
+  - numeric correlation heatmap
+  - high-correlation pair table (`abs(correlation) >= 0.95`)
+  - ID-like/high-cardinality column check
+  - high-missing column check (`missing_rate >= 0.80`)
+  - constant / near-constant column check
   - target과 feature 관계의 초기 단서
   - 누수 의심 컬럼 메모
 - 가능한 경우 notebook을 실행해 output을 남김
@@ -74,6 +80,10 @@ $ARGUMENTS
 - target 분포:
 - 결측치 / 이상치 / 중복:
 - 주요 feature:
+- drop 후보:
+- drop 이유:
+- 근거:
+- preprocess 반영 여부:
 - 누수 의심 컬럼:
 - split 방식 추천:
 - 전처리 후보:

@@ -141,18 +141,10 @@ py -3.10 -m venv venv
 
 ---
 
-**Q. `requirements.txt`와 `requirements-automl.txt`는 뭐가 다른가요?**
+**Q. `requirements.txt`에는 무엇이 들어 있나요?**
 
-`requirements.txt`는 EDA, baseline, Streamlit에 필요한 가벼운 기본 의존성입니다.
-`requirements-automl.txt`는 여기에 AutoGluon과 SHAP까지 포함한 전체 의존성입니다.
-
-이 템플릿의 A-to-Z 기본 설치는 AutoGluon까지 포함하므로 아래를 사용합니다.
-
-```bash
-pip install -r requirements-automl.txt
-```
-
-빠르게 baseline만 확인해야 할 때만 아래를 보조 선택지로 사용합니다.
+`requirements.txt` 하나에 EDA, baseline, Streamlit, AutoGluon, SHAP 의존성을 모두 포함합니다.
+이 템플릿에서는 아래 명령만 사용합니다.
 
 ```bash
 pip install -r requirements.txt
@@ -160,7 +152,7 @@ pip install -r requirements.txt
 
 ---
 
-**Q. `pip install -r requirements-automl.txt`가 오래 걸리거나 실패해요.**
+**Q. `pip install -r requirements.txt`가 오래 걸리거나 실패해요.**
 
 AutoGluon은 여러 tabular 모델 후보와 optional dependency를 설치하므로 시간이 오래 걸릴 수 있습니다. 먼저 아래를 확인하세요.
 
@@ -179,7 +171,7 @@ rm -rf venv
 python3.10 -m venv venv
 source venv/bin/activate
 python -m pip install --upgrade pip
-pip install -r requirements-automl.txt
+pip install -r requirements.txt
 ```
 
 Windows PowerShell:
@@ -190,51 +182,13 @@ Remove-Item -Recurse -Force venv
 py -3.10 -m venv venv
 .\venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
-pip install -r requirements-automl.txt
+pip install -r requirements.txt
 ```
 
 설치가 끝난 뒤 아래로 확인합니다.
 
 ```bash
 python -c "from autogluon.tabular import TabularPredictor; print('autogluon OK')"
-```
-
----
-
-**Q. `pip install -r requirements.txt`도 오류나요.**
-
-기본 의존성도 실패하면 가상환경을 새로 만들고 pip를 업그레이드한 뒤 다시 설치합니다.
-
-```bash
-python3.10 -m venv venv
-source venv/bin/activate   # Windows PowerShell: .\venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-pip install -r requirements.txt
-```
-
-`pipreqs . --force`로 requirements를 재생성하지 마세요. 이 템플릿은 재현성을 위해 고정 버전 파일을 유지합니다.
-
----
-
-**Q. `numpy.dtype size changed` 또는 pandas/numpy binary incompatibility 오류가 나요.**
-
-기존 전역 Python이나 오래된 venv에 서로 맞지 않는 pandas/numpy wheel이 섞였을 때 자주 납니다.
-해당 환경을 계속 고치기보다 Python 3.10 가상환경을 새로 만드는 것이 가장 빠릅니다.
-
-```bash
-deactivate
-rm -rf venv
-python3.10 -m venv venv
-source venv/bin/activate
-python -m pip install --upgrade pip
-pip install -r requirements-automl.txt
-python -c "import pandas, numpy; print('pandas/numpy OK')"
-```
-
-Windows PowerShell에서는 `rm -rf venv` 대신 아래를 사용합니다.
-
-```powershell
-Remove-Item -Recurse -Force venv
 ```
 
 ---
@@ -255,10 +209,10 @@ rm -rf venv
 python3.10 -m venv venv
 source venv/bin/activate
 python -m pip install --upgrade pip
-pip install -r requirements-automl.txt
+pip install -r requirements.txt
 ```
 
-AutoGluon 설치가 계속 실패하면, 일단 `requirements.txt`로 baseline까지 진행하고 설치 로그를 확인한 뒤 AutoML 단계에서 다시 해결합니다. 최종 A-to-Z 제출 전에는 `requirements-automl.txt` 설치와 `autogluon OK` 확인이 필요합니다.
+AutoGluon 설치가 계속 실패하면 Python 버전과 설치 로그를 먼저 확인합니다. 최종 A-to-Z 제출 전에는 `requirements.txt` 설치와 `autogluon OK` 확인이 필요합니다.
 
 ---
 
@@ -297,7 +251,7 @@ model = load_model()
 
 주요 원인:
 1. **메모리 초과**: 모델이 1GB를 넘으면 Streamlit Cloud에서 실행 불가. HF Hub에 올리고 런타임에 다운로드하는 방식 사용
-2. **의존성 오류**: AutoGluon까지 쓰는 프로젝트라면 로컬에서 `pip install -r requirements-automl.txt` 먼저 테스트
+2. **의존성 오류**: AutoGluon까지 쓰는 프로젝트라면 로컬에서 `pip install -r requirements.txt` 먼저 테스트
 3. **secrets 누락**: `.streamlit/secrets.toml`이 배포 환경에 설정되어 있는지 확인 (Streamlit Cloud 설정 페이지에서 입력)
 
 Streamlit Cloud 로그 확인: 앱 페이지 우측 하단 "Manage app" → "Logs"
@@ -399,4 +353,4 @@ model = model.to(device)
 **Q. Python 버전이 달라서 문제가 생겨요.**
 
 이 템플릿은 `.python-version`으로 `3.10.13`을 명시합니다.
-다른 Python으로 만든 venv를 계속 쓰지 말고 Python 3.10으로 새 venv를 만든 뒤 `pip install -r requirements-automl.txt`를 다시 실행하세요.
+다른 Python으로 만든 venv를 계속 쓰지 말고 Python 3.10으로 새 venv를 만든 뒤 `pip install -r requirements.txt`를 다시 실행하세요.

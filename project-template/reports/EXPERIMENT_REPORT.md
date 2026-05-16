@@ -6,8 +6,10 @@
 - **data_version**:
 - **target column**:
 - **task type / positive class**:
+- **사용한 feature 정책**:
 - **사용할 feature**:
 - **제외할 feature와 이유**:
+- **상관/중복 점검 결과**:
 - **split 방식 / seed**:
 - **primary metric / 보조 metric**:
 - **baseline 모델**:

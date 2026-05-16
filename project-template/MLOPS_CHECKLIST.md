@@ -9,7 +9,7 @@
 
 - [ ] `project-template/` 안에서 작업하고 있는가?
 - [ ] Python `3.10.x` 가상환경을 생성하고 활성화했는가?
-- [ ] `pip install -r requirements-automl.txt`로 AutoGluon 포함 전체 의존성을 설치했는가?
+- [ ] `pip install -r requirements.txt`로 AutoGluon 포함 전체 의존성을 설치했는가?
 - [ ] `python -c "import pandas, sklearn, streamlit; print('core OK')"`가 성공했는가?
 - [ ] `python -c "from autogluon.tabular import TabularPredictor; print('autogluon OK')"`가 성공했는가?
 - [ ] `python scripts/preprocess.py --help`, `python scripts/train.py --help`, `python scripts/train_automl.py --help`가 모두 실행되는가?
@@ -32,6 +32,8 @@
 - [ ] `docs/specs/DATA_ANALYSIS_SPEC.md`의 EDA 기준을 확인했는가?
 - [ ] `reports/DATA_CARD.md`에 데이터 출처, 수집 조건, 주요 컬럼을 기록했는가?
 - [ ] 결측치, 이상치, 중복, target 분포를 확인했는가?
+- [ ] constant, near-constant, high-missing, ID-like, high-correlation feature 후보를 확인했는가?
+- [ ] drop 후보와 근거를 `reports/DATA_CARD.md`에 기록했는가?
 - [ ] EDA 결과를 바탕으로 `data/processed/`에 학습용 CSV를 만들었는가?
 - [ ] train/validation/test split 기준과 seed를 기록했는가?
 - [ ] `data_manifest.json`에 데이터 버전, checksum, row/column 수를 남겼는가?
@@ -42,6 +44,7 @@
 ## 3. 데이터 누수 점검
 
 - [ ] target과 직접 연결된 컬럼이 feature에 포함되지 않았는가?
+- [ ] Data Card에 기록한 leakage/drop 후보가 processed CSV에서 의도대로 제외됐는가?
 - [ ] scaler, encoder, imputer 등은 train 데이터로만 fit했는가?
 - [ ] 시간 순서가 중요한 문제에서 미래 정보가 섞이지 않았는가?
 - [ ] 중복 샘플이 train/test에 동시에 들어가지 않았는가?

@@ -27,27 +27,40 @@
 - 확인한 주요 질문:
 - target 분포:
 - feature 분포:
+- feature redundancy:
 - 결측치 / 이상치:
 - 중복 데이터:
 - 눈에 띄는 패턴:
 - split 방식 추천:
 
-## 4. 데이터 품질과 위험
+## 4. Feature Drop Candidates
+
+| column | reason | evidence | recommended_action |
+|--------|--------|----------|--------------------|
+|        |        |          |                    |
+
+- **correlation threshold**: numeric feature 간 절대 상관계수 `>= 0.95`
+- **high-missing threshold**: 결측률 `>= 80%`
+- **near-constant threshold**: 최빈값 비율 `>= 95%`
+- **preprocess 반영 여부**:
+
+## 5. 데이터 품질과 위험
 
 - 라벨 오류 가능성:
 - 편향 가능성:
 - 개인정보 / 민감정보:
 - 데이터 누수 의심 컬럼:
 
-## 5. 전처리 결정
+## 6. 전처리 결정
 
 - 적용한 전처리:
 - 제거한 컬럼:
+- 제거한 이유와 근거:
 - rename / target mapping:
 - processed에 반영하지 않고 train pipeline에 남긴 변환:
 - 전처리 후 row / column 수:
 
-## 6. Split과 버전 기록
+## 7. Split과 버전 기록
 
 - data_version:
 - train / validation / test 비율:
@@ -56,7 +69,7 @@
 - processed checksum:
 - `data_manifest.json` 반영 여부:
 
-## 7. 다음 액션
+## 8. 다음 액션
 
 - [ ] 추가 확인할 EDA 질문
 - [ ] 정제하거나 제외할 컬럼

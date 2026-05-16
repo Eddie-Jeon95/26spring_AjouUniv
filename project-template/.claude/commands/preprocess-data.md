@@ -23,6 +23,7 @@ $ARGUMENTS
 - `CLAUDE.md`의 데이터/전처리 원칙 확인
 - `docs/specs/DATA_ANALYSIS_SPEC.md`의 processed 데이터 기준 확인
 - `reports/DATA_CARD.md`의 EDA 결과와 전처리 후보 확인
+- `reports/DATA_CARD.md`의 Feature Drop Candidates와 `preprocess 반영 여부` 확인
 - 인자로 받은 raw 파일, target, output 경로 확인
 - header, separator, column names가 불확실하면 raw 파일 첫 줄을 보고 학생에게 확인 질문
 
@@ -38,6 +39,7 @@ $ARGUMENTS
 - separator / header:
 - column names:
 - rename:
+- drop 후보 출처:
 - drop columns:
 - target mapping:
 - duplicate 처리:
@@ -73,7 +75,7 @@ python scripts/preprocess.py \
 ## 4단계: 기록 갱신
 
 - `data_manifest.json`에 raw/processed path, checksum, row/column 수, data_version이 기록됐는지 확인
-- `reports/DATA_CARD.md`에 processed 파일 경로와 전처리 결정을 반영
+- `reports/DATA_CARD.md`에 processed 파일 경로, 전처리 결정, 실제 drop columns 반영 여부를 반영
 - 다음 baseline 명령을 제안
 
 ```bash
@@ -84,5 +86,6 @@ python scripts/train.py --data data/processed/[processed_file] --target [target]
 
 주의:
 - scaler, encoder, imputer처럼 fit이 필요한 변환은 여기서 하지 않습니다.
+- `--drop-columns`는 Data Card에 근거가 남은 leakage, ID-like, constant, high-missing, high-correlation 후보를 반영할 때 사용합니다.
 - test set 정보나 성능을 보고 전처리 결정을 하지 않습니다.
 - raw/processed 데이터 파일은 Git에 추가하지 않습니다.

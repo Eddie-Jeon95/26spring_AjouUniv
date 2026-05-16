@@ -24,10 +24,11 @@ $ARGUMENTS
 - `CLAUDE.md`의 모델링 원칙 확인
 - `docs/specs/MODELING_SPEC.md`의 baseline 기준 확인
 - `docs/specs/METRICS_AND_INTERPRETATION_SPEC.md`의 metric 기준 확인
-- `reports/DATA_CARD.md`에서 processed 파일, target, 누수 의심, split 추천 확인
+- `reports/DATA_CARD.md`에서 processed 파일, target, Feature Drop Candidates, 누수 의심, split 추천 확인
 - `docs/specs/PROJECT_SPEC.md`의 task type, positive class, primary/auxiliary metric 확인
 - processed CSV 파일이 존재하는지 확인
 - target column이 파일에 있는지 확인
+- Data Card에 기록된 drop 후보가 processed CSV에서 의도대로 제외됐는지 확인
 - classification인지 regression인지 확인
 - binary classification이면 positive class와 threshold 조정 가능 여부 확인
 - `--primary-metric`이 실제 계산 가능한 metric인지 확인
@@ -44,8 +45,10 @@ $ARGUMENTS
 - data_version:
 - target column:
 - task type / positive class:
+- 사용할 feature 정책:
 - 사용할 feature:
 - 제외할 feature와 이유:
+- 상관/중복 점검 결과:
 - split 방식 / seed:
 - primary metric / 보조 metric:
 - baseline 모델:

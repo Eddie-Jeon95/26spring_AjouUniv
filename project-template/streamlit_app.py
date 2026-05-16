@@ -249,7 +249,7 @@ def load_autogluon_model(artifact_path: str) -> Any:
         from autogluon.tabular import TabularPredictor
     except ImportError as exc:
         raise ImportError(
-            "AutoGluon이 설치되어 있지 않습니다. `pip install -r requirements-automl.txt` 후 다시 실행하세요."
+            "AutoGluon이 설치되어 있지 않습니다. `pip install -r requirements.txt` 후 다시 실행하세요."
         ) from exc
 
     resolved = resolve_path(artifact_path)
@@ -663,7 +663,7 @@ def shap_values_for_model(
         import shap
     except ImportError as exc:
         raise ImportError(
-            "SHAP이 설치되어 있지 않습니다. `pip install -r requirements-automl.txt` 후 다시 실행하세요."
+            "SHAP이 설치되어 있지 않습니다. `pip install -r requirements.txt` 후 다시 실행하세요."
         ) from exc
 
     feature_columns = features.columns.tolist()

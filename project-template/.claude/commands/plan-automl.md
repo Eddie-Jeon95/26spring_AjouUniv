@@ -26,7 +26,7 @@ $ARGUMENTS
 - `docs/specs/DATA_ANALYSIS_SPEC.md`의 leakage 후보, split 추천, processed 데이터 기준 확인
 - `docs/specs/MODELING_SPEC.md`의 AutoGluon AutoML 원칙 확인
 - `docs/specs/METRICS_AND_INTERPRETATION_SPEC.md`의 metric 해석 기준 확인
-- `reports/DATA_CARD.md`의 target, 제외 컬럼, split/seed, processed 파일 확인
+- `reports/DATA_CARD.md`의 target, Feature Drop Candidates, 제외 컬럼, split/seed, processed 파일 확인
 
 ## 2단계: Baseline 결과 확인
 
@@ -50,6 +50,7 @@ $ARGUMENTS
 - task type:
 - positive class:
 - leakage 제외 컬럼:
+- feature drop 근거:
 - split 방식 / seed:
 - primary metric:
 - auxiliary metrics:

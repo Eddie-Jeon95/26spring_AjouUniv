@@ -34,7 +34,7 @@ project-template/        # 복사해서 사용하는 프로젝트 템플릿
 ├── reports/            # 데이터 카드, 실험 리포트, 오류 분석, 모델 카드
 ├── scripts/            # 전처리와 학습 진입점
 ├── src/                # 데이터/모델/로깅 확장 지점
-├── requirements.txt    # 기본 Python 의존성
+├── requirements.txt    # 전체 Python 의존성
 └── streamlit_app.py    # 실험 결과와 추론 로그 시각화 앱
 ```
 

@@ -55,20 +55,13 @@ python --version
 
 ### 0-4. 전체 의존성 설치
 
-이 프로젝트의 A-to-Z 기본 설치는 AutoGluon까지 포함합니다.
+이 프로젝트의 의존성 설치는 `requirements.txt` 하나로 통일합니다.
+EDA, baseline, AutoGluon, Streamlit 확인에 필요한 패키지를 모두 포함합니다.
 
 ```bash
 python -m pip install --upgrade pip
-pip install -r requirements-automl.txt
-```
-
-가볍게 EDA와 baseline만 먼저 확인해야 하는 경우에만 보조 선택지로 아래를 사용할 수 있습니다.
-
-```bash
 pip install -r requirements.txt
 ```
-
-단, 위 가벼운 설치만 하면 `scripts/train_automl.py`는 실행할 수 없습니다.
 
 ### 0-5. 설치 검증
 
@@ -125,6 +118,7 @@ EDA 후 `reports/DATA_CARD.md`에 반드시 기록합니다.
 - row / column 수
 - target 분포
 - 결측치, 중복, 이상치
+- feature redundancy와 drop 후보
 - 주요 feature와 target 관계
 - 데이터 누수 의심 컬럼
 - split 방식과 seed
@@ -144,6 +138,7 @@ python scripts/preprocess.py \
 ```
 
 제거할 컬럼이 없으면 `--drop-columns` 줄은 빼고 실행합니다.
+`--drop-columns`는 EDA와 `reports/DATA_CARD.md`에 근거를 남긴 leakage, ID-like, constant, high-missing, high-correlation 후보를 반영할 때 사용합니다.
 
 header가 없는 파일이면 아래처럼 컬럼명을 지정합니다.
 

@@ -5,6 +5,11 @@ scikit-learn==1.5.0
 matplotlib==3.9.0
 seaborn==0.13.2
 
+# AutoML / local explanation
+# AutoGluon Tabular는 이 템플릿에서 Python 3.10.x 환경을 전제로 합니다.
+autogluon.tabular[all]==1.5.0
+shap==0.49.1
+
 # EDA notebook 실행
 ipykernel==6.29.4
 nbformat==5.10.4

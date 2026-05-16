@@ -182,7 +182,7 @@ def main(config_path: str, args: argparse.Namespace | None = None) -> dict[str, 
         from autogluon.tabular import TabularPredictor
     except ImportError as exc:
         raise ImportError(
-            "AutoGluon이 설치되어 있지 않습니다. AutoML 실행 전 `pip install -r requirements-automl.txt`를 실행하세요."
+            "AutoGluon이 설치되어 있지 않습니다. AutoML 실행 전 `pip install -r requirements.txt`를 실행하세요."
         ) from exc
 
     config = load_config(config_path)
