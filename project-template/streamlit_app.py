@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import pickle
+import re
 import sys
 import time
 from pathlib import Path
@@ -32,6 +33,7 @@ REGISTRY_PATH = BASE_DIR / "model_registry.json"
 LOG_PATH = BASE_DIR / "logs" / "inference.jsonl"
 MISSING_OPTION = "(missing)"
 LOWER_IS_BETTER_METRICS = {"mae", "rmse"}
+DISPLAY_ACRONYMS = {"ai", "api", "auc", "gbm", "id", "ml", "rf", "svm", "xg", "xt"}
 
 
 def short_id(value: Any, prefix: int = 10, suffix: int = 6) -> str:
@@ -46,6 +48,51 @@ def truncate_text(value: Any, max_chars: int = 80) -> str:
     if len(text) <= max_chars:
         return text
     return f"{text[:max_chars - 1]}…"
+
+
+def humanize_identifier(value: Any, uppercase_short_tokens: bool = False) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return "n/a"
+    text = re.sub(r"[-_]+", " ", text)
+    text = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1 \2", text)
+    text = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", text)
+    text = re.sub(r"\bGBMXT\b", "GBM XT", text)
+    words = [word for word in text.split() if word]
+    display_words = []
+    for word in words:
+        if uppercase_short_tokens and len(word) <= 3:
+            display_words.append(word.upper())
+        elif word.lower() in DISPLAY_ACRONYMS:
+            display_words.append(word.upper())
+        else:
+            display_words.append(word[:1].upper() + word[1:])
+    return " ".join(display_words)
+
+
+def display_data_name(data_version: Any) -> str:
+    return humanize_identifier(data_version, uppercase_short_tokens=True)
+
+
+def display_experiment_type(record: dict[str, Any] | None) -> str:
+    value = str((record or {}).get("experiment_type") or "baseline")
+    return "AutoML" if value.lower() == "automl" else humanize_identifier(value)
+
+
+def display_model_name(record: dict[str, Any] | None, selected_model: str | None = None) -> str:
+    raw_name = selected_model or (record or {}).get("model_name") or (record or {}).get("model_id")
+    return humanize_identifier(raw_name)
+
+
+def display_created_at(record: dict[str, Any] | None) -> str:
+    created_at = str((record or {}).get("created_at") or "")
+    if not created_at:
+        return "n/a"
+    return created_at.replace("T", " ")[:16]
+
+
+def display_run_label(record: dict[str, Any]) -> str:
+    return f"{display_model_name(record)} · {display_experiment_type(record)} · {display_created_at(record)}"
 
 
 def format_metric(value: Any) -> str:
@@ -97,6 +144,15 @@ def records_for_data_version(registry: list[dict[str, Any]], data_version: str |
     if data_version is None:
         return list(registry)
     return [record for record in registry if record.get("data_version") == data_version]
+
+
+def data_versions_from_registry(registry: list[dict[str, Any]]) -> list[str | None]:
+    versions: list[str | None] = []
+    for record in registry:
+        version = record.get("data_version")
+        if version not in versions:
+            versions.append(version)
+    return versions or [None]
 
 
 def ranked_records(registry: list[dict[str, Any]], primary_metric: str) -> list[dict[str, Any]]:
@@ -285,24 +341,76 @@ def automl_metric_rows(record: dict[str, Any], baseline: dict[str, Any] | None, 
     return pd.DataFrame(rows)
 
 
-def automl_display_leaderboard(leaderboard: pd.DataFrame) -> pd.DataFrame:
+def numeric_row_value(row: pd.Series, column: str) -> float | None:
+    if column not in row:
+        return None
+    value = row.get(column)
+    if isinstance(value, (int, float)) and pd.notna(value):
+        return float(value)
+    return None
+
+
+def is_ensemble_model_name(model_name: Any) -> bool:
+    return "ensemble" in str(model_name or "").lower()
+
+
+def is_single_model_row(row: pd.Series) -> bool:
+    stack_level = numeric_row_value(row, "stack_level")
+    if stack_level is not None and stack_level > 1:
+        return False
+    return not is_ensemble_model_name(row.get("model"))
+
+
+def best_single_model_row(leaderboard: pd.DataFrame) -> pd.Series | None:
+    if leaderboard.empty or "model" not in leaderboard.columns:
+        return None
+    for _, row in leaderboard.iterrows():
+        if is_single_model_row(row):
+            return row
+    return None
+
+
+def prediction_time_value(row: pd.Series | None) -> float | None:
+    if row is None:
+        return None
+    test_time = numeric_row_value(row, "pred_time_test")
+    if test_time is not None:
+        return test_time
+    return numeric_row_value(row, "pred_time_val")
+
+
+def automl_display_leaderboard(leaderboard: pd.DataFrame, selected_model: str) -> pd.DataFrame:
     if leaderboard.empty:
         return pd.DataFrame()
-    column_map = {
-        "model": "model",
-        "score_val": "validation_score",
-        "score_test": "test_score",
-        "eval_metric": "eval_metric",
-        "fit_time": "fit_time_s",
-        "pred_time_val": "val_pred_time_s",
-        "pred_time_test": "test_pred_time_s",
-    }
-    columns = [column for column in column_map if column in leaderboard.columns]
-    display_df = leaderboard[columns].rename(columns=column_map).copy()
-    for column in display_df.columns:
-        if column != "model" and pd.api.types.is_numeric_dtype(display_df[column]):
-            display_df[column] = display_df[column].round(4)
-    return display_df
+    best_single = best_single_model_row(leaderboard)
+    best_single_name = str(best_single.get("model")) if best_single is not None else None
+    rows = []
+    for _, row in leaderboard.iterrows():
+        raw_model = str(row.get("model") or "n/a")
+        validation_score = numeric_row_value(row, "score_val")
+        test_score = numeric_row_value(row, "score_test")
+        if raw_model == selected_model:
+            role = "Selected"
+        elif best_single_name and raw_model == best_single_name:
+            role = "Best single model"
+        else:
+            role = "Candidate"
+        rows.append(
+            {
+                "role": role,
+                "model": display_model_name(None, raw_model),
+                "validation_score": round(validation_score, 4) if validation_score is not None else None,
+                "test_score": round(test_score, 4) if test_score is not None else None,
+                "gap": round(abs(validation_score - test_score), 4)
+                if validation_score is not None and test_score is not None
+                else None,
+                "prediction_time_s": round(prediction_time_value(row), 4) if prediction_time_value(row) is not None else None,
+                "fit_time_s": round(numeric_row_value(row, "fit_time"), 4)
+                if numeric_row_value(row, "fit_time") is not None
+                else None,
+            }
+        )
+    return pd.DataFrame(rows)
 
 
 def selected_leaderboard_row(
@@ -399,9 +507,9 @@ def registry_to_dataframe(
                 "is_best": "yes" if same_record(record, best_record) else "",
                 "delta_vs_baseline": format_delta(delta),
                 "created_at": record.get("created_at"),
-                "model_id": short_id(record.get("model_id")),
-                "run_id": short_id(record.get("run_id")),
-                "data_version": record.get("data_version"),
+                "model": display_model_name(record),
+                "experiment": display_experiment_type(record),
+                "data": display_data_name(record.get("data_version")),
                 "primary_metric": record.get("primary_metric"),
                 "selection_metric": format_metric(metrics.get(primary_metric)),
                 "val_accuracy": format_metric(metrics.get("accuracy")),
@@ -431,7 +539,7 @@ def model_label(record: dict[str, Any]) -> str:
     primary_metric = record.get("primary_metric", "macro_f1")
     metric = record.get("metrics", {}).get(primary_metric)
     metric_text = format_metric(metric)
-    return f"{short_id(record.get('model_id'))} · {record.get('data_version')} · val {primary_metric}={metric_text}"
+    return f"{display_run_label(record)} · val {primary_metric}={metric_text}"
 
 
 def class_report_dataframe(metrics: dict[str, Any]) -> pd.DataFrame:
@@ -847,6 +955,7 @@ def render_autogluon_local_explanation(
         "Compare AutoGluon models",
         options=model_names,
         default=default_models,
+        format_func=lambda name: display_model_name(record, name),
         key=f"local_explanation_models_{record.get('run_id')}",
     )
     if len(selected_models) != 2:
@@ -876,11 +985,14 @@ def render_autogluon_local_explanation(
                 task_type,
                 positive_class,
             )
+            prediction_row["model"] = display_model_name(record, model_name)
+            prediction_row["raw_model"] = model_name
             comparison_rows.append(prediction_row)
             model_payloads.append((model_name, prediction_row, probabilities))
         except Exception as exc:  # noqa: BLE001
             comparison_rows.append({
-                "model": model_name,
+                "model": display_model_name(record, model_name),
+                "raw_model": model_name,
                 "prediction": "error",
                 "confidence": "n/a",
                 "explanation_target": "n/a",
@@ -894,7 +1006,8 @@ def render_autogluon_local_explanation(
     columns = st.columns(2)
     for column, (model_name, prediction_row, _) in zip(columns, model_payloads):
         with column:
-            st.markdown(f"#### {model_name}")
+            st.markdown(f"#### {display_model_name(record, model_name)}")
+            st.caption(f"raw_model={model_name}")
             try:
                 with st.spinner("Computing SHAP values..."):
                     values = shap_values_for_model(
@@ -971,23 +1084,38 @@ def render_automl_overview(
     selected_model = selected_automl_model(record, summary)
     leaderboard = load_csv_artifact(record.get("leaderboard_path"))
     selected_row = selected_leaderboard_row(leaderboard, selected_model)
+    best_single = best_single_model_row(leaderboard)
+    best_single_name = str(best_single.get("model")) if best_single is not None else None
 
-    st.markdown("#### AutoML Result")
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Selected Model", short_id(selected_model, prefix=18, suffix=8))
-    c2.metric(f"Val {primary_metric}", format_metric(validation_metric_value(record, primary_metric)))
-    c3.metric(f"Test {primary_metric}", format_metric(test_metric_value(record, primary_metric)))
-    c4.metric("Δ vs Baseline", format_delta(metric_delta(record, baseline, primary_metric)))
+    st.markdown("#### AutoML Selection")
     st.caption(
         "AutoGluon은 여러 전처리/모델 pipeline 후보를 같은 data_version과 split 조건에서 비교합니다. "
         "Validation metric은 모델 선택 기준이고, test metric은 최종 확인용입니다."
     )
 
-    st.dataframe(automl_metric_rows(record, baseline, primary_metric), use_container_width=True, hide_index=True)
+    selection_rows = [
+        {
+            "item": "Selected AutoML Model",
+            "value": display_model_name(record, selected_model),
+            "meaning": "validation metric 기준 최종 선택",
+        },
+        {
+            "item": "Best Single-Model Alternative",
+            "value": display_model_name(record, best_single_name) if best_single_name else "n/a",
+            "meaning": "앙상블 없이 비교할 deploy-friendly 후보",
+        },
+        {
+            "item": "Selected Prediction Time",
+            "value": f"{prediction_time_value(selected_row):.4f}s" if prediction_time_value(selected_row) is not None else "n/a",
+            "meaning": "leaderboard의 test prediction time",
+        },
+    ]
+    st.dataframe(pd.DataFrame(selection_rows), use_container_width=True, hide_index=True)
 
     if selected_row is not None and not leaderboard.empty:
         detail_rows = []
         for source, label in [
+            ("model", "Raw selected model"),
             ("eval_metric", "AutoGluon eval metric"),
             ("score_val", "Leaderboard validation score"),
             ("score_test", "Leaderboard test score"),
@@ -1012,32 +1140,42 @@ def render_overview_tab(
     baseline: dict[str, Any] | None,
     primary_metric: str,
 ) -> None:
-    st.subheader("Run Overview")
+    st.subheader("Experiment Summary")
     config = load_run_config(record.get("experiment_path", ""))
     data_config = run_data_config(config)
     data = load_training_data(data_config.get("path"))
     target = target_column(config) or data_config.get("target_column") or "n/a"
     summary = load_automl_summary(record.get("automl_summary_path"))
 
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Task", str(record.get("task_type") or summary.get("task_type") or "classification"))
-    c2.metric("Experiment", str(record.get("experiment_type") or "baseline"))
-    c3.metric("Primary Metric", str(record.get("primary_metric") or primary_metric))
-    c4.metric("Data Version", str(record.get("data_version") or "n/a"))
-
     split = summary.get("split") if summary else {}
     if not split:
         split = config.get("data", {}).get("split", {}) if isinstance(config.get("data"), dict) else {}
+
+    st.markdown("#### Selected Run")
+    split_text = (
+        f"train={split.get('train_rows', 'n/a')} · "
+        f"validation={split.get('val_rows', 'n/a')} · "
+        f"test={split.get('test_rows', 'n/a')}"
+    )
+    summary_rows = [
+        {"item": "Model", "value": display_model_name(record), "meaning": display_experiment_type(record)},
+        {"item": "Data", "value": display_data_name(record.get("data_version")), "meaning": "selected data version"},
+        {"item": "Target", "value": str(target), "meaning": "prediction target"},
+        {"item": "Task", "value": str(record.get("task_type") or summary.get("task_type") or "classification"), "meaning": "modeling task"},
+        {"item": "Split", "value": split_text, "meaning": "same split used for comparison"},
+    ]
+    st.dataframe(pd.DataFrame(summary_rows), use_container_width=True, hide_index=True)
+
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Target", str(target))
-    c2.metric("Train Rows", split.get("train_rows", "n/a"))
-    c3.metric("Validation Rows", split.get("val_rows", "n/a"))
-    c4.metric("Test Rows", split.get("test_rows", "n/a"))
+    c1.metric(f"Validation {primary_metric}", format_metric(validation_metric_value(record, primary_metric)))
+    c2.metric(f"Test {primary_metric}", format_metric(test_metric_value(record, primary_metric)))
+    c3.metric("Δ vs Baseline", format_delta(metric_delta(record, baseline, primary_metric)))
+    c4.metric("Validation-Test Gap", format_metric(validation_test_gap(record, primary_metric)))
 
     if same_record(record, best_record):
         st.success(f"Current best by validation {primary_metric}.")
     elif best_record is not None:
-        st.info(f"Current best: {short_id(best_record.get('model_id'))}")
+        st.info(f"Current best: {display_model_name(best_record)}")
 
     if is_automl_record(record):
         render_automl_overview(record, baseline, primary_metric, summary)
@@ -1047,6 +1185,7 @@ def render_overview_tab(
         numeric_count = int(data[feature_columns].select_dtypes(include=["number"]).shape[1]) if feature_columns else 0
         categorical_count = max(len(feature_columns) - numeric_count, 0)
         missing_rate = float(data[feature_columns].isna().mean().mean()) if feature_columns else 0.0
+        st.markdown("#### Data Profile")
         c1, c2, c3 = st.columns(3)
         c1.metric("Features", len(feature_columns))
         c2.metric("Numeric / Categorical", f"{numeric_count} / {categorical_count}")
@@ -1057,9 +1196,14 @@ def render_overview_tab(
             distribution = data[target].value_counts(dropna=False).rename_axis("class").reset_index(name="count")
             st.dataframe(distribution, use_container_width=True, hide_index=True)
 
-    if summary:
-        st.markdown("#### AutoGluon Summary")
-        with st.expander("Raw AutoGluon summary JSON"):
+    with st.expander("Full run metadata"):
+        st.write(f"model_id: `{record.get('model_id')}`")
+        st.write(f"run_id: `{record.get('run_id')}`")
+        st.write(f"data_version: `{record.get('data_version')}`")
+        st.write(f"artifact_path: `{record.get('artifact_path')}`")
+        st.write(f"experiment_path: `{record.get('experiment_path')}`")
+        if summary:
+            st.markdown("##### Raw AutoGluon summary JSON")
             st.json(summary, expanded=False)
 
 
@@ -1077,14 +1221,15 @@ def render_leaderboard_tab(
         summary = load_automl_summary(record.get("automl_summary_path"))
         selected_model = selected_automl_model(record, summary)
         selected_row = selected_leaderboard_row(leaderboard, selected_model)
-        display_df = automl_display_leaderboard(leaderboard)
+        display_df = automl_display_leaderboard(leaderboard, selected_model)
 
         if selected_row is not None:
+            st.markdown(f"**Selected model:** {display_model_name(record, selected_model)}")
             c1, c2, c3, c4 = st.columns(4)
-            c1.metric("Selected Model", short_id(selected_model, prefix=18, suffix=8))
-            c2.metric("Leaderboard Rows", len(leaderboard))
-            c3.metric("Validation Score", format_metric(selected_row.get("score_val")))
-            c4.metric("Test Score", format_metric(selected_row.get("score_test")))
+            c1.metric("Candidates", len(leaderboard))
+            c2.metric("Validation Score", format_metric(selected_row.get("score_val")))
+            c3.metric("Test Score", format_metric(selected_row.get("score_test")))
+            c4.metric("Prediction Time", f"{prediction_time_value(selected_row):.4f}s" if prediction_time_value(selected_row) is not None else "n/a")
 
         st.caption(
             "이 표는 AutoGluon이 비교한 후보 pipeline입니다. "
@@ -1235,6 +1380,7 @@ def render_predict_tab(
                 "Prediction model",
                 options=model_options,
                 index=default_index,
+                format_func=lambda name: display_model_name(record, name),
                 key=f"prediction_model_{record.get('run_id')}",
                 help=(
                     "기본값은 AutoGluon이 validation metric으로 선택한 모델입니다. "
@@ -1244,7 +1390,7 @@ def render_predict_tab(
             selected_row = selected_leaderboard_row(leaderboard, prediction_model_name)
             if selected_row is not None:
                 st.caption(
-                    f"selected={prediction_model_name} · "
+                    f"raw_model={prediction_model_name} · "
                     f"validation_score={format_metric(selected_row.get('score_val'))} · "
                     f"test_score={format_metric(selected_row.get('score_test'))}"
                 )
@@ -1292,8 +1438,10 @@ def render_predict_tab(
         result_col2.metric("Confidence", format_percent(confidence))
         result_col3.metric("Latency", f"{latency_ms:.1f} ms")
         if prediction_model_name:
-            st.caption(f"AutoGluon prediction model: `{prediction_model_name}`")
+            st.markdown(f"**Prediction model:** {display_model_name(record, prediction_model_name)}")
+            st.caption(f"Raw AutoGluon model: `{prediction_model_name}`")
 
+        st.markdown("#### Class Probabilities")
         if probabilities:
             probability_df = pd.DataFrame(
                 [
@@ -1318,6 +1466,8 @@ def render_predict_tab(
                     f"threshold={threshold:.2f} 기준 label={threshold_prediction} "
                     f"(positive probability={format_percent(probabilities[positive_class])})"
                 )
+        else:
+            st.info("classification probability를 제공하지 않는 모델입니다.")
         st.caption(f"model_id={short_id(record.get('model_id'))} / run_id={short_id(record.get('run_id'))}")
 
         render_autogluon_local_explanation(
@@ -1467,10 +1617,36 @@ def main() -> None:
         st.warning("model_registry.json이 비어 있습니다. 먼저 /train-baseline 또는 scripts/train.py를 실행하세요.")
         return
 
-    labels = [model_label(record) for record in registry]
-    selected_label = st.sidebar.selectbox("Model", labels, index=default_selected_index(registry))
-    selected_index = labels.index(selected_label)
-    selected_record = registry[selected_index]
+    default_record = registry[default_selected_index(registry)]
+    data_options = data_versions_from_registry(registry)
+    default_data_version = default_record.get("data_version")
+    data_index = data_options.index(default_data_version) if default_data_version in data_options else 0
+    selected_data_version = st.sidebar.selectbox(
+        "Data",
+        options=data_options,
+        index=data_index,
+        format_func=display_data_name,
+    )
+
+    data_records = records_for_data_version(registry, selected_data_version)
+    if not data_records:
+        st.warning("선택한 data version에 연결된 model record가 없습니다.")
+        return
+
+    sidebar_metric = str((data_records[-1]).get("primary_metric") or "macro_f1")
+    model_options = ranked_records(data_records, sidebar_metric) or data_records
+    preferred_record = best_model_record(data_records, selected_data_version, sidebar_metric) or model_options[0]
+    model_index = next(
+        (index for index, record in enumerate(model_options) if same_record(record, preferred_record)),
+        0,
+    )
+    selected_model_index = st.sidebar.selectbox(
+        "Model",
+        options=list(range(len(model_options))),
+        index=model_index,
+        format_func=lambda index: display_run_label(model_options[index]),
+    )
+    selected_record = model_options[selected_model_index]
     primary_metric = str(selected_record.get("primary_metric") or "macro_f1")
     comparison_records = records_for_data_version(registry, selected_record.get("data_version"))
     best_record = best_model_record(registry, selected_record.get("data_version"), primary_metric)
@@ -1480,7 +1656,7 @@ def main() -> None:
     if best_record is not None:
         best_value = validation_metric_value(best_record, primary_metric)
         best_delta = metric_delta(best_record, baseline, primary_metric)
-        st.sidebar.success(f"{short_id(best_record.get('model_id'))}")
+        st.sidebar.success(display_model_name(best_record))
         st.sidebar.caption(
             f"validation {primary_metric}={format_metric(best_value)}"
             f" · Δ vs baseline={format_delta(best_delta)}"
@@ -1493,11 +1669,12 @@ def main() -> None:
     test_metrics = selected_record.get("test_metrics", {})
     st.sidebar.metric(f"Val {primary_metric}", format_metric(val_metrics.get(primary_metric)))
     st.sidebar.metric(f"Test {primary_metric}", format_metric(test_metrics.get(primary_metric)))
-    st.sidebar.caption(f"data_version: `{selected_record.get('data_version')}`")
+    st.sidebar.caption(f"Data: {display_data_name(selected_record.get('data_version'))}")
 
     with st.sidebar.expander("Full IDs"):
         st.write(f"model_id: `{selected_record.get('model_id')}`")
         st.write(f"run_id: `{selected_record.get('run_id')}`")
+        st.write(f"data_version: `{selected_record.get('data_version')}`")
         st.write(f"primary_metric: `{selected_record.get('primary_metric')}`")
 
     overview_tab, leaderboard_tab, evaluation_tab, prediction_tab, logs_tab = st.tabs(
