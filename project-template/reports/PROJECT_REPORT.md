@@ -48,6 +48,15 @@
 |--------|-------|----------|-------------------|------------------|
 |        |       |          |                   |                  |
 
+### Feature Engineering Candidates
+
+`create`로 승인한 feature만 `scripts/preprocess.py`의 `add_project_features(df)`에 구현합니다.
+feature engineering으로 processed 데이터가 바뀌면 새 `data_version`을 사용합니다.
+
+| feature | source columns | reason | leakage risk | student decision | implemented |
+|---------|----------------|--------|--------------|------------------|-------------|
+|         |                |        |              | create/skip/investigate | no |
+
 ### Pipeline Decisions
 
 ```yaml pipeline_decisions

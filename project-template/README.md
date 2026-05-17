@@ -107,9 +107,12 @@ CLI 인자는 임시 override가 필요할 때만 사용합니다.
 - feature redundancy
 - ID-like, high-missing, constant, high-correlation 후보
 - leakage 의심 컬럼
+- feature engineering 후보와 예측 시점 사용 가능 여부
 - split 방식
 
-학생이 `keep / drop / investigate` 결정을 확인한 뒤 `pipeline_decisions`를 채우고 전처리를 실행합니다.
+학생이 `keep / drop / investigate`와 feature별 `create / skip / investigate` 결정을 확인한 뒤 `pipeline_decisions`를 채우고 전처리를 실행합니다.
+승인된 project-specific feature만 `scripts/preprocess.py`의 `add_project_features(df)`에 명확한 Python 코드로 추가합니다.
+날짜 파생, 텍스트 길이, 숫자 비율, 단위 변환, 명확한 flag는 `/data`에서 다룰 수 있지만 target encoding, fit 기반 변환, validation/test 성능을 보고 고른 feature는 학습 단계 이후 별도로 다룹니다.
 
 ```bash
 python scripts/preprocess.py --decisions reports/PROJECT_REPORT.md

@@ -152,6 +152,56 @@ def load_raw_csv(
     raise ValueError("--header는 infer 또는 none이어야 합니다.")
 
 
+def add_project_features(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
+    """Add student-approved project-specific features.
+
+    Keep this function empty until `/data` has proposed feature engineering
+    candidates and the student has confirmed which ones to create. This runs
+    after column rename/target mapping and before drop_columns, so approved
+    features can use source columns that will be removed later.
+    Return the updated DataFrame and the names of newly created feature columns.
+    """
+    created_features: list[str] = []
+    return df, created_features
+
+
+def apply_project_features(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
+    before_columns = set(df.columns)
+    before_rows = len(df)
+    updated_df, created_features = add_project_features(df)
+    if not isinstance(updated_df, pd.DataFrame):
+        raise ValueError("add_project_features(df)는 DataFrame을 반환해야 합니다.")
+    if len(updated_df) != before_rows:
+        raise ValueError(
+            "add_project_features(df)는 row 수를 바꾸지 않아야 합니다. "
+            "row 제거가 필요하면 `/data`에서 학생 확인 후 별도 전처리 결정으로 기록하세요."
+        )
+    if created_features is None:
+        created_features = []
+
+    created_features = [str(feature).strip() for feature in created_features if str(feature).strip()]
+    duplicate_feature_names = sorted({feature for feature in created_features if created_features.count(feature) > 1})
+    if duplicate_feature_names:
+        raise ValueError(f"created feature 이름이 중복됩니다: {duplicate_feature_names}")
+
+    after_columns = set(updated_df.columns)
+    missing_features = sorted(set(created_features) - after_columns)
+    if missing_features:
+        raise ValueError(f"created feature로 기록했지만 DataFrame에 없는 컬럼입니다: {missing_features}")
+
+    existing_features = sorted(set(created_features) & before_columns)
+    if existing_features:
+        raise ValueError(f"created feature 이름이 기존 컬럼과 겹칩니다: {existing_features}")
+
+    unrecorded_features = sorted(after_columns - before_columns - set(created_features))
+    if unrecorded_features:
+        raise ValueError(
+            "add_project_features(df)에서 새 컬럼을 만들었지만 created_features에 기록하지 않았습니다: "
+            f"{unrecorded_features}"
+        )
+    return updated_df, created_features
+
+
 def preprocess(args: argparse.Namespace) -> dict[str, Any]:
     input_path = Path(args.input)
     output_path = Path(args.output)
@@ -177,6 +227,13 @@ def preprocess(args: argparse.Namespace) -> dict[str, Any]:
     if target_column not in df.columns:
         raise ValueError(f"target column '{target_column}'이 데이터에 없습니다. 현재 컬럼: {list(df.columns)}")
 
+    if target_map:
+        df[target_column] = df[target_column].astype(str).replace(target_map)
+
+    df, created_features = apply_project_features(df)
+    if target_column not in df.columns:
+        raise ValueError("add_project_features(df) 이후 target column이 사라졌습니다.")
+
     if drop_columns:
         missing_drop = sorted(set(drop_columns) - set(df.columns))
         if missing_drop:
@@ -184,9 +241,6 @@ def preprocess(args: argparse.Namespace) -> dict[str, Any]:
         if target_column in drop_columns:
             raise ValueError("target column은 drop할 수 없습니다.")
         df = df.drop(columns=drop_columns)
-
-    if target_map:
-        df[target_column] = df[target_column].astype(str).replace(target_map)
 
     if args.drop_duplicate_rows and args.keep_duplicate_rows:
         raise ValueError("--drop-duplicate-rows와 --keep-duplicate-rows는 함께 사용할 수 없습니다.")
@@ -228,6 +282,8 @@ def preprocess(args: argparse.Namespace) -> dict[str, Any]:
             "columns": columns,
             "rename": rename_map,
             "drop_columns": drop_columns,
+            "created_features": created_features,
+            "project_feature_function": "add_project_features",
             "target_map": target_map,
             "duplicate_policy": duplicate_policy,
             "duplicate_rows_removed": int(duplicate_rows_removed),

@@ -39,6 +39,10 @@ EDA는 모델링 전에 데이터가 믿을 만한지 판단하기 위한 단계
 drop 후보는 무조건 제거하지 않습니다.
 학생에게 `keep`, `drop`, `investigate` 중 하나를 선택하게 하고, 근거를 `PROJECT_REPORT.md`에 남깁니다.
 
+feature engineering 후보도 이 단계에서 함께 검토합니다.
+학생이 `create`, `skip`, `investigate` 중 하나로 확인한 feature만 processed 데이터에 반영합니다.
+feature engineering으로 processed 데이터가 바뀌면 새 `data_version`을 사용합니다.
+
 ---
 
 ## 3. Processed Data
@@ -51,6 +55,7 @@ processed 파일에 반영해도 되는 작업:
 - 컬럼명 strip, rename
 - 사용하지 않을 컬럼 drop
 - EDA에서 근거를 남긴 leakage, ID-like, constant, high-missing, high-correlation 후보 제거
+- 날짜 파생, 텍스트 길이, 숫자 비율, 단위 변환, 명확한 flag처럼 target 없이 한 row에서 계산 가능한 feature 생성
 - target label mapping
 - 중복 row 제거
 - target 결측 row 제거
@@ -61,10 +66,13 @@ processed 파일에 미리 반영하지 말아야 하는 작업:
 - scaler fit
 - encoder fit
 - imputer fit
+- target encoding
 - train/test 전체를 보고 fit하거나 확정한 supervised feature selection
 - test set 정보를 이용한 threshold/model 선택
+- validation/test 성능을 보고 고른 feature
 
 fit이 필요한 변환은 train split 이후 pipeline 안에서 처리합니다.
+승인된 project-specific feature는 `scripts/preprocess.py`의 `add_project_features(df)` 함수에 명확한 Python 코드로 추가하고, 생성 feature 목록을 `data_manifest.json`에 남깁니다.
 
 ---
 
