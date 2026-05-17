@@ -38,7 +38,6 @@ CLI 인자는 임시 override가 필요할 때만 사용합니다.
 /automl
 /evaluate
 /demo
-/checkpoint
 ```
 
 특정 컬럼 판단, metric 해석, 오류 메시지 설명은 command보다 자연어 채팅으로 물어보는 것이 좋습니다.
@@ -97,8 +96,3 @@ streamlit run streamlit_app.py --server.port 8502
 - `logs/*`
 - `.env`
 - `.streamlit/secrets.toml`
-
-## 커밋은 언제 하나요?
-
-큰 단계가 끝날 때 `/checkpoint`를 사용합니다.
-예를 들어 project definition, data preprocessing, baseline, AutoML, final evaluation이 각각 좋은 checkpoint입니다.

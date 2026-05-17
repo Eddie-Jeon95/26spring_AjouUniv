@@ -32,9 +32,6 @@ py -3.10 -m venv venv
 python --version
 python -c "import pandas, sklearn, streamlit; print('core OK')"
 python -c "from autogluon.tabular import TabularPredictor; print('autogluon OK')"
-python scripts/preprocess.py --help
-python scripts/train.py --help
-python scripts/train_automl.py --help
 ```
 
 ### 0-2. 원본 데이터 배치
@@ -58,7 +55,6 @@ Claude Code를 사용한다면 아래 단계로 진행합니다.
 /automl
 /evaluate
 /demo
-/checkpoint [message]
 ```
 
 직접 명령을 실행할 때도 기본은 decision block 기반입니다.
@@ -179,13 +175,6 @@ streamlit run streamlit_app.py
 - Evaluation
 - Prediction
 - Logs
-
-### `/checkpoint`: 단계 저장
-
-단계가 끝나면 변경 파일을 확인하고 커밋합니다.
-데이터와 모델 산출물은 Git에 올리지 않습니다.
-
----
 
 ## 3. 주요 산출물
 

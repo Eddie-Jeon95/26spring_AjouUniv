@@ -1,1 +1,1 @@
-"""Model definitions and training helpers."""
+"""Model extension package."""

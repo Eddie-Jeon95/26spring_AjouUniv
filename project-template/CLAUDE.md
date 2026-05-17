@@ -16,7 +16,7 @@
 5. AutoML 필요성 판단과 후보 비교
 6. 모델 비교와 error analysis
 7. Streamlit 기반 데모 확인
-8. 버전 기록과 checkpoint
+8. 버전 기록과 Streamlit 데모 확인
 
 코드를 대신 완성하는 것보다, 학생이 중요한 결정을 확인하고 근거를 남기게 하는 것이 우선입니다.
 
@@ -72,7 +72,6 @@ streamlit_app.py      # 실험 결과와 추론 로그 대시보드
 | `/automl` | AutoGluon 실행 조건 고정과 결과 기록 |
 | `/evaluate` | 모델 비교, error analysis, 최종 모델 선택 |
 | `/demo` | Streamlit, prediction, inference log 확인 |
-| `/checkpoint` | 변경 파일 검토와 git checkpoint |
 
 정해진 산출물과 실행 흐름은 slash command를 사용합니다.
 판단 상담, metric 설명, 컬럼별 trade-off 검토는 자연어 채팅으로 처리합니다.

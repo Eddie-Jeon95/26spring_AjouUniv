@@ -1722,44 +1722,6 @@ def render_predict_tab(
         st.error(f"예측 실패: {exc}")
 
 
-def render_experiments_tab(
-    registry: list[dict[str, Any]],
-    record: dict[str, Any],
-    best_record: dict[str, Any] | None,
-    baseline: dict[str, Any] | None,
-    primary_metric: str,
-) -> None:
-    st.subheader(f"Experiment Registry ({record.get('data_version')})")
-    registry_df = registry_to_dataframe(registry, primary_metric, best_record, baseline)
-    if not registry_df.empty:
-        st.dataframe(registry_df, use_container_width=True, hide_index=True)
-        trend_source = registry_trend_dataframe(registry)
-        trend_cols = [col for col in ["val_accuracy", "val_macro_f1"] if col in trend_source.columns]
-        if trend_cols and len(trend_source) > 1:
-            trend_df = trend_source.set_index("created_at")[trend_cols]
-            st.line_chart(trend_df)
-
-    st.subheader("Selected Run")
-    with st.expander("Full run metadata"):
-        st.write(f"model_id: `{record.get('model_id')}`")
-        st.write(f"run_id: `{record.get('run_id')}`")
-        st.write(f"data_version: `{record.get('data_version')}`")
-        st.write(f"artifact_path: `{record.get('artifact_path')}`")
-        st.write(f"experiment_path: `{record.get('experiment_path')}`")
-
-    metrics = load_metrics(record.get("experiment_path", ""))
-    render_metric_summary(record, metrics)
-
-    st.subheader("Validation Confusion Matrix (validation 기준)")
-    confusion = load_confusion_matrix(record.get("confusion_matrix_path", ""))
-    cm_df = confusion_matrix_dataframe(confusion)
-    if cm_df.empty:
-        st.info("confusion_matrix.json을 찾을 수 없습니다.")
-    else:
-        st.dataframe(cm_df, use_container_width=True)
-        st.caption(confusion.get("format", "rows=true_label, columns=predicted_label"))
-
-
 def render_logs_tab() -> None:
     st.subheader("Inference Logs")
     logs = load_logs()

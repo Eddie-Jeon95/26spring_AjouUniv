@@ -172,3 +172,115 @@ Streamlit MVP는 아래를 확인할 수 있어야 합니다.
 
 global feature importance, global SHAP, batch prediction은 MVP 범위에서 제외합니다.
 단일 row explanation은 모델 판단의 근거 후보이지 인과 설명으로 쓰지 않습니다.
+
+---
+
+## 9. 실전 요청 예시: 부도 예측
+
+아래 예시는 그대로 복사하기보다 자신의 데이터셋에 맞게 target, positive class, 오류 비용, metric을 바꿔 사용합니다.
+좋은 요청은 “무엇을 실행할지”뿐 아니라 “어떤 기준으로 판단할지”를 함께 줍니다.
+
+### Project
+
+```text
+/project
+
+부도 예측 tabular classification 프로젝트다.
+raw 데이터는 data/raw/bankruptcy.csv, target은 bankrupt로 가정한다.
+positive class는 bankrupt=1이고, false negative 비용이 false positive보다 크다.
+
+primary metric은 pr_auc를 우선 검토하되, 실제 선택 기준은
+부도 기업 recall을 충분히 확보하면서 precision이 무너지지 않는가로 잡고 싶다.
+auxiliary metrics는 recall_macro, precision_macro, macro_f1로 둔다.
+
+reports/PROJECT_REPORT.md에 문제 정의, metric rationale, training_decisions 초안을 정리해줘.
+```
+
+### Data
+
+```text
+/data data/raw/bankruptcy.csv target=bankrupt
+
+실행 전에 EDA 계획부터 제시해줘.
+중점은 class imbalance, missingness pattern, extreme financial ratios,
+duplicate company rows, leakage 후보 컬럼이다.
+
+특히 부도 이후에 알 수 있는 사후 정보, 상태값, 정리/상장폐지 관련 컬럼,
+ID-like 컬럼, fiscal year/company id가 있는지 확인해줘.
+컬럼별로 keep / drop / investigate 결정을 제안하고, 근거를 짧게 써줘.
+
+전처리 실행 전에 reports/PROJECT_REPORT.md의 pipeline_decisions를 업데이트해줘.
+```
+
+### Train
+
+```text
+/train baseline
+
+processed 데이터 기준으로 baseline을 설계해줘.
+부도 예측이므로 class imbalance와 false negative 비용을 우선 고려한다.
+
+실행 전 확인할 것:
+- data_version, target, positive_class
+- stratified split 가능 여부
+- leakage 제외 컬럼이 processed 데이터에서 빠졌는지
+- primary_metric=pr_auc가 계산 가능한지
+- baseline 모델이 너무 복잡하지 않은지
+
+문제가 없으면 training_decisions를 정리하고 학습 명령을 실행 가능한 상태로 만들어줘.
+```
+
+### Evaluate Baseline
+
+```text
+/evaluate
+
+baseline 결과를 평가해줘.
+pr_auc만 보지 말고 recall_macro, precision_macro, macro_f1, confusion matrix를 같이 봐줘.
+
+특히 bankrupt=1을 놓치는 FN이 어느 정도인지, threshold 조정 여지가 있는지,
+metric trade-off가 어떤지 정리해줘.
+다음 실험 후보는 데이터 누수 위험이 낮은 것부터 우선순위로 제안해줘.
+```
+
+### AutoML
+
+```text
+/automl
+
+AutoGluon을 baseline과 같은 data_version, target, split, seed, primary metric 조건으로
+비교할 수 있는지 먼저 확인해줘. time_limit은 300초로 시작한다.
+
+채택 기준은 단순히 pr_auc 최고가 아니라:
+- bankrupt=1 recall 개선
+- precision이 과도하게 붕괴하지 않을 것
+- validation/test 차이가 너무 크지 않을 것
+- pipeline 복잡도를 감당할 수 있을 것
+
+조건이 맞으면 training_decisions의 AutoML 관련 값을 정리해줘.
+```
+
+### Final Evaluation
+
+```text
+/evaluate
+
+baseline과 AutoML을 같은 조건에서 비교해줘.
+validation metric, test metric, confusion matrix, threshold_metrics, AutoGluon leaderboard를 같이 봐줘.
+
+최종 모델을 하나 고르되, 선택하지 않은 후보의 이유도 남겨줘.
+reports/PROJECT_REPORT.md의 Final Decision과 Model Card 내용을 업데이트할 수 있게 정리해줘.
+```
+
+### Demo
+
+```text
+/demo
+
+Streamlit 데모 기준으로 연결 상태를 점검해줘.
+확인 대상은 model_registry, run artifacts, leaderboard, confusion_matrix,
+threshold_metrics, prediction, inference log다.
+
+AutoGluon 모델이면 local SHAP explanation이 Prediction 탭에서 작동하는지도 확인 기준에 포함해줘.
+단, SHAP은 인과 설명이 아니라 모델 판단 근거 후보로만 해석한다.
+```

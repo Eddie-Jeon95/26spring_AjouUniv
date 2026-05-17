@@ -3,7 +3,6 @@
 logs/inference.jsonl 에 요청/응답/latency를 저장한다.
 """
 import json
-import time
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -53,17 +52,3 @@ class InferenceLogger:
             error_type=type(error).__name__,
             error_message=str(error),
         )
-
-
-# 사용 예시
-# logger = InferenceLogger()
-#
-# start = time.time()
-# result = model.predict(user_input)
-# elapsed = (time.time() - start) * 1000
-#
-# logger.log(
-#     input_summary=user_input[:100],
-#     prediction=result,
-#     latency_ms=elapsed,
-# )

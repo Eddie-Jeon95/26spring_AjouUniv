@@ -1,7 +1,7 @@
 # 기본 baseline 학습 설정
 # 이 파일은 demo/default 예시입니다.
-# 실제 프로젝트에서는 학생이 YAML을 직접 수정하기보다 아래처럼 CLI 인자를 넘겨 실행합니다.
-# python scripts/train.py --data data/processed/<file>.csv --target <target> --data-version <version>
+# 실제 프로젝트에서는 reports/PROJECT_REPORT.md의 decision block을 채운 뒤 실행합니다.
+# python scripts/train.py --decisions reports/PROJECT_REPORT.md
 # PROJECT_REPORT.md의 training_decisions.split에 실제 split 결정을 기록합니다.
 # 데이터가 없으면 scikit-learn 샘플 데이터로 전체 흐름을 점검합니다.
 

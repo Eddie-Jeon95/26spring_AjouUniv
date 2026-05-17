@@ -1,1 +1,1 @@
-"""Data loading and preprocessing helpers."""
+"""Data extension package."""
