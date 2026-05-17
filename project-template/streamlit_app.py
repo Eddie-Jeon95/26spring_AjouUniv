@@ -1826,7 +1826,7 @@ def main() -> None:
 
     registry = load_registry()
     if not registry:
-        st.warning("model_registry.json이 비어 있습니다. 먼저 /train-baseline 또는 scripts/train.py를 실행하세요.")
+        st.warning("model_registry.json이 비어 있습니다. 먼저 /train 또는 scripts/train.py를 실행하세요.")
         return
 
     default_record = registry[default_selected_index(registry)]

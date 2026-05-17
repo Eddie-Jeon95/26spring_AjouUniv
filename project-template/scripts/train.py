@@ -776,7 +776,7 @@ def write_result_markdown(
             "",
             "- Validation metric은 실험 비교 기준입니다. Test metric은 최종 확인용으로 해석하세요.",
             "- Threshold metric은 validation split 기준이며, test set으로 threshold를 선택하지 않습니다.",
-            "- 자세한 비교는 `model_registry.json`과 `reports/EXPERIMENT_REPORT.md`에 정리하세요.",
+            "- 자세한 비교는 `model_registry.json`과 `reports/PROJECT_REPORT.md`에 정리하세요.",
             "",
         ]
     )

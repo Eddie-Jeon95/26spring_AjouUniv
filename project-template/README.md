@@ -2,68 +2,31 @@
 
 > 한 줄로 프로젝트를 설명하세요.
 
+이 템플릿은 ML 프로젝트를 문제 정의, 데이터 분석, 전처리, baseline, AutoML, 평가, Streamlit 데모까지 한 흐름으로 진행하도록 돕습니다.
+긴 Python 명령어를 외우기보다 `reports/PROJECT_REPORT.md`의 decision block을 채우고, slash command로 단계별 진행을 요청하는 방식을 권장합니다.
+
 ---
 
-## 0. A-to-Z Quickstart
+## 0. Quickstart
 
-이 README는 `project-template/`를 복사하거나 clone한 뒤, 처음 환경 설정부터 AutoGluon AutoML과 Streamlit 확인까지 끝까지 따라가는 가이드입니다.
-기본 표준 환경은 **Python 3.10.x**입니다. 이 템플릿은 `.python-version`에 `3.10.13`을 명시합니다.
-
-### 0-1. 프로젝트 폴더로 이동
+### 0-1. 환경 준비
 
 ```bash
 cd project-template
-```
-
-루트 저장소에서 작업 중이면 `project-template/` 안에서 아래 명령을 실행합니다.
-
-### 0-2. Python 3.10 확인
-
-```bash
-python3.10 --version
-```
-
-정상 예시는 아래와 같습니다.
-
-```text
-Python 3.10.x
-```
-
-`python3.10` 명령이 없다면 먼저 Python 3.10을 설치하세요. macOS에서는 `pyenv`, Windows에서는 Python Launcher 또는 공식 설치 파일을 사용할 수 있습니다. 자세한 문제 해결은 `FAQ.md`를 봅니다.
-
-### 0-3. 가상환경 생성과 활성화
-
-macOS / Linux:
-
-```bash
 python3.10 -m venv venv
 source venv/bin/activate
+python -m pip install --upgrade pip
+pip install -r requirements.txt
 ```
 
-Windows PowerShell:
+Windows PowerShell에서는 아래처럼 가상환경을 만듭니다.
 
 ```powershell
 py -3.10 -m venv venv
 .\venv\Scripts\Activate.ps1
 ```
 
-활성화 후 아래 명령이 `venv` 안의 Python을 가리키는지 확인합니다.
-
-```bash
-python --version
-```
-
-### 0-4. 전체 의존성 설치
-
-이 프로젝트의 의존성 설치는 `requirements.txt` 하나로 통일합니다.
-EDA, baseline, AutoGluon, Streamlit 확인에 필요한 패키지를 모두 포함합니다.
-
-```bash
-python -m pip install --upgrade pip
-pip install -r requirements.txt
-```
-
-### 0-5. 설치 검증
+설치 확인:
 
 ```bash
 python --version
@@ -74,26 +37,7 @@ python scripts/train.py --help
 python scripts/train_automl.py --help
 ```
 
-Streamlit 실행 전 코드 문법만 빠르게 확인하려면 아래도 실행합니다.
-
-```bash
-python -m py_compile scripts/preprocess.py scripts/train.py scripts/train_automl.py streamlit_app.py
-```
-
-### 0-6. 문제 정의 작성
-
-먼저 `docs/specs/PROJECT_SPEC.md`에 아래 결정을 짧게 적습니다.
-
-- 입력 데이터와 예측 대상
-- task type: `classification` 또는 `regression`
-- binary classification이면 positive class
-- primary metric과 auxiliary metrics
-- false positive / false negative / 큰 오차 중 더 중요한 오류
-- Streamlit 최종 화면에서 확인할 항목
-
-목표 수치가 없으면 baseline 실행 후 “baseline 대비 개선”으로 성공 기준을 잡습니다.
-
-### 0-7. 원본 데이터 배치
+### 0-2. 원본 데이터 배치
 
 원본 CSV, TSV, TXT 파일을 `data/raw/`에 둡니다.
 
@@ -101,153 +45,165 @@ python -m py_compile scripts/preprocess.py scripts/train.py scripts/train_automl
 data/raw/your_raw_file.csv
 ```
 
-원본 데이터는 Git에 올리지 않습니다. `.gitignore`가 `data/raw/*`를 제외하도록 설정되어 있습니다.
+원본 데이터, processed 데이터, 모델 파일, 실행 산출물, 로그는 Git에 올리지 않습니다.
 
-### 0-8. EDA 실행과 Data Card 작성
+### 0-3. 권장 진행 순서
 
-Claude Code를 사용한다면 아래처럼 요청합니다.
+Claude Code를 사용한다면 아래 단계로 진행합니다.
 
 ```text
-/eda data/raw/[raw_file] target=[target]
+/project
+/data data/raw/[raw_file] target=[target]
+/train baseline
+/automl
+/evaluate
+/demo
+/checkpoint [message]
 ```
 
-직접 진행한다면 `notebooks/01_eda_template.ipynb`를 복사해 데이터 이름을 반영한 notebook을 만들고, `docs/specs/DATA_ANALYSIS_SPEC.md` 기준으로 확인합니다.
+직접 명령을 실행할 때도 기본은 decision block 기반입니다.
 
-EDA 후 `reports/DATA_CARD.md`에 반드시 기록합니다.
+```bash
+python scripts/preprocess.py --decisions reports/PROJECT_REPORT.md
+python scripts/train.py --decisions reports/PROJECT_REPORT.md
+python scripts/train_automl.py --decisions reports/PROJECT_REPORT.md
+```
 
-- row / column 수
+CLI 인자는 임시 override가 필요할 때만 사용합니다.
+
+---
+
+## 1. 핵심 문서
+
+| 파일 | 역할 |
+|------|------|
+| `README.md` | 학생용 시작 가이드 |
+| `CLAUDE.md` | Claude Code 작업 원칙 |
+| `PROJECT_GUIDE.md` | 문제 정의, EDA, 모델링, metric, AutoML, 평가 기준 |
+| `reports/PROJECT_REPORT.md` | Data Card, Experiment Report, Error Analysis, Model Card, decision block |
+| `FAQ.md` | 설치와 자주 막히는 문제 |
+
+`PROJECT_REPORT.md` 안의 YAML block은 실행 스크립트가 직접 읽습니다.
+자유 서술과 표는 기록용이고, 실제 실행 설정은 `pipeline_decisions`, `training_decisions`만 사용합니다.
+
+---
+
+## 2. 단계별 흐름
+
+### `/project`: 문제 정의
+
+학생이 직접 확인할 결정:
+
+- 입력 데이터와 target
+- task type과 positive class
+- 중요한 오류 비용
+- primary metric과 auxiliary metrics
+- Streamlit 최종 화면에서 확인할 항목
+
+기록 위치: `reports/PROJECT_REPORT.md`의 Project Definition 섹션
+
+### `/data`: EDA와 전처리
+
+확인할 것:
+
 - target 분포
 - 결측치, 중복, 이상치
-- feature redundancy와 drop 후보
-- 주요 feature와 target 관계
-- 데이터 누수 의심 컬럼
-- split 방식과 seed
-- processed 파일에 반영할 전처리 결정
+- feature redundancy
+- ID-like, high-missing, constant, high-correlation 후보
+- leakage 의심 컬럼
+- split 방식
 
-특히 `reports/DATA_CARD.md`의 `pipeline_decisions` YAML block에 전처리 결정을 적어두면,
-다음 전처리 단계에서 긴 CLI 인자 대신 이 block을 자동 적용할 수 있습니다.
-
-### 0-9. 전처리 실행
-
-전처리는 raw 데이터를 학습 가능한 processed CSV로 정돈하는 단계입니다.
-
-권장 흐름은 `reports/DATA_CARD.md`의 `pipeline_decisions` block을 먼저 수정한 뒤 아래처럼 실행하는 것입니다.
+학생이 `keep / drop / investigate` 결정을 확인한 뒤 `pipeline_decisions`를 채우고 전처리를 실행합니다.
 
 ```bash
-python scripts/preprocess.py --decisions reports/DATA_CARD.md
+python scripts/preprocess.py --decisions reports/PROJECT_REPORT.md
 ```
 
-CLI 인자를 함께 넘기면 CLI 값이 MD block보다 우선합니다.
-예를 들어 임시로 drop column만 바꿔 실행할 때는 아래처럼 덮어쓸 수 있습니다.
+### `/train`: baseline과 일반 실험
+
+확인할 것:
+
+- baseline 모델
+- primary/auxiliary metrics
+- split과 seed
+- feature 정책
+- 새 실험이면 가설과 비교 기준
+
+`training_decisions`를 채운 뒤 실행합니다.
 
 ```bash
-python scripts/preprocess.py --decisions reports/DATA_CARD.md --drop-columns [leakage_or_id_columns]
+python scripts/train.py --decisions reports/PROJECT_REPORT.md
 ```
 
-`drop_columns`는 EDA와 `reports/DATA_CARD.md`에 근거를 남긴 leakage, ID-like, constant, high-missing, high-correlation 후보를 반영할 때 사용합니다.
-`header`가 없는 파일이면 `pipeline_decisions` block의 `header: none`과 `columns: [...]`를 채운 뒤 같은 명령을 실행합니다.
+### `/automl`: AutoGluon AutoML
 
-`scaler`, `encoder`, `imputer`처럼 train 데이터에 fit해야 하는 변환은 여기서 하지 않고 학습 pipeline에 남깁니다.
+AutoML은 baseline 이후 같은 data_version, split, metric 조건에서 pipeline 후보를 비교하는 단계입니다.
 
-### 0-10. Baseline 학습
+학생이 확인할 것:
 
-먼저 `reports/EXPERIMENT_REPORT.md`의 `training_decisions` block에 processed 데이터, target, task type, metric, split, baseline 모델을 적습니다.
-
-classification 실행:
+- 실행 목적
+- time_limit과 presets
+- 성공 기준
+- auxiliary metric 악화 허용 여부
+- test set은 최종 확인용이라는 원칙
 
 ```bash
-python scripts/train.py --decisions reports/EXPERIMENT_REPORT.md
+python scripts/train_automl.py --decisions reports/PROJECT_REPORT.md
 ```
 
-regression이면 `training_decisions` block에서 `task_type: regression`, `primary_metric: rmse`, `metrics: [mae, r2]`, `baseline.model_name: linear_regression`처럼 바꾼 뒤 같은 명령을 실행합니다.
+### `/evaluate`: 모델 비교와 오류 분석
 
-학습 후 아래 산출물을 확인합니다.
+확인할 것:
 
-- `experiments/runs/<run_id>/metrics.json`
-- `experiments/runs/<run_id>/test_metrics.json`
-- `experiments/runs/<run_id>/predictions.csv`
-- `experiments/runs/<run_id>/confusion_matrix.json` classification일 때
-- `experiments/runs/<run_id>/threshold_metrics.csv` binary classification이고 probability가 있을 때
-- `model_registry.json`
+- 같은 data_version, split, metric인지
+- validation/test 차이
+- confusion matrix 또는 residual
+- threshold 조정 필요성
+- 실패 유형과 다음 실험
+- 최종 모델 선택 이유
 
-### 0-11. Baseline 결과 검토
+기록 위치: Error Analysis, Model Card, Final Checklist 섹션
 
-Claude Code를 사용한다면 아래 커맨드로 결과를 검토합니다.
+### `/demo`: Streamlit 데모
 
-```text
-/compare-models
-/analyze-errors
-```
-
-직접 검토할 때는 `metrics.json`, `test_metrics.json`, `predictions.csv`, `confusion_matrix.json`을 확인하고 `reports/EXPERIMENT_REPORT.md`, `reports/ERROR_ANALYSIS.md`에 기록합니다.
-
-중요한 규칙:
-
-- validation metric은 실험 비교 기준입니다.
-- test metric은 최종 확인용입니다.
-- test set으로 모델 선택이나 threshold 선택을 하지 않습니다.
-
-### 0-12. AutoGluon AutoML 실행
-
-AutoGluon은 baseline 이후 같은 processed CSV, target, split, metric 조건에서 pipeline 후보를 비교하는 단계입니다.
-실행 전에 leakage 제외 컬럼이 processed CSV에서 빠졌는지, `data_version`이 baseline과 같은지 확인합니다.
-
-classification 실행:
-
-```bash
-python scripts/train_automl.py --decisions reports/EXPERIMENT_REPORT.md
-```
-
-regression도 같은 `training_decisions` block을 사용합니다. AutoML 예산은 `automl.time_limit`, 품질/속도 설정은 `automl.presets`에서 조정합니다.
-
-AutoGluon 실행 후 아래 산출물을 확인합니다.
-
-- `models/automl/<run_id>/`
-- `experiments/runs/<run_id>/leaderboard.csv`
-- `experiments/runs/<run_id>/automl_summary.json`
-- `experiments/runs/<run_id>/metrics.json`
-- `experiments/runs/<run_id>/test_metrics.json`
-- `model_registry.json`
-
-AutoGluon 결과가 baseline보다 좋아도 validation/test 차이, auxiliary metric 악화, pipeline 복잡도, leakage 가능성을 함께 봅니다.
-
-### 0-13. Streamlit 확인
-
-Claude Code를 사용한다면 아래처럼 요청합니다.
-
-```text
-/check-streamlit
-```
-
-직접 실행할 때:
+직접 실행:
 
 ```bash
 streamlit run streamlit_app.py
 ```
 
-포트가 이미 사용 중이면:
+확인할 탭:
 
-```bash
-streamlit run streamlit_app.py --server.port 8502
-```
+- Overview
+- Leaderboard
+- Evaluation
+- Prediction
+- Logs
 
-Streamlit에서 최소한 아래를 확인합니다.
+### `/checkpoint`: 단계 저장
 
-- Overview: task, target, data_version, split, metric
-- Leaderboard: AutoGluon leaderboard 또는 registry 기반 실험 비교
-- Evaluation: validation/test metric, confusion matrix
-- Prediction: sklearn pickle 또는 AutoGluon predictor 단건 예측
-- Logs: `logs/inference.jsonl`, latency, error rate
+단계가 끝나면 변경 파일을 확인하고 커밋합니다.
+데이터와 모델 산출물은 Git에 올리지 않습니다.
 
-### 0-14. Checkpoint
+---
 
-단계가 끝날 때마다 문서와 가벼운 기록 파일만 commit합니다.
+## 3. 주요 산출물
 
-```text
-/checkpoint [메시지]
-```
+- `data_manifest.json`: data_version, row/column 수, checksum, split 기록
+- `model_registry.json`: model_id, metric, artifact path, run path 기록
+- `experiments/runs/<run_id>/config.yaml`: 실행에 사용된 effective config
+- `experiments/runs/<run_id>/metrics.json`: validation metric
+- `experiments/runs/<run_id>/test_metrics.json`: 최종 확인용 test metric
+- `experiments/runs/<run_id>/predictions.csv`: error analysis용 예측 샘플
+- `experiments/runs/<run_id>/confusion_matrix.json`: Streamlit Evaluation 탭
+- `experiments/runs/<run_id>/leaderboard.csv`: AutoGluon 후보 비교
+- `logs/inference.jsonl`: Streamlit 추론 로그
 
-Git에 올리지 않는 항목:
+---
+
+## 4. Git 제외 항목
+
+아래 항목은 Git에 추가하지 않습니다.
 
 - `data/raw/*`
 - `data/processed/*`
@@ -259,141 +215,20 @@ Git에 올리지 않는 항목:
 
 ---
 
-## 1. 프로젝트 개요
+## 5. 자연어로 물어보기 좋은 것
 
-- **문제 정의**:
-- **입력 -> 출력**:
-- **사용자 / 활용 상황**:
-- **Task type / positive class**:
-- **주요 평가 지표**:
-
-문제 정의와 성공 기준은 `docs/specs/PROJECT_SPEC.md`에 먼저 정리합니다.
-Claude Code와 협업할 때의 작업 기준은 `CLAUDE.md`를 따릅니다.
-
----
-
-## 2. 데이터 분석
-
-- **데이터 출처**:
-- **데이터 버전**: `data_manifest.json`의 `data_version`
-- **데이터 크기**:
-- **주요 컬럼 / 입력**:
-- **EDA 핵심 발견**:
-- **품질 이슈 / 편향 가능성**:
-- **데이터 누수 점검 결과**:
-
-자세한 내용은 `reports/DATA_CARD.md`에 기록합니다.
-분석 기준은 `docs/specs/DATA_ANALYSIS_SPEC.md`를 따릅니다.
-
----
-
-## 3. 전처리
-
-전처리 단계에서는 raw 데이터를 모델 학습용 processed CSV로 정돈합니다.
-
-- **raw 파일 경로**:
-- **processed 파일 경로**:
-- **target column**:
-- **적용한 전처리**:
-- **제거한 컬럼과 이유**:
-- **train pipeline에 남긴 fit 기반 변환**:
-
-컬럼명 정리, rename/drop, target mapping, 중복 제거, target 결측 제거처럼 파일 자체를 정돈하는 작업은 `scripts/preprocess.py`에서 처리합니다.
-scaler, encoder, imputer처럼 train 데이터에 fit해야 하는 변환은 학습 pipeline에 남깁니다.
-
----
-
-## 4. 모델링과 실험
-
-- **Baseline 모델**:
-- **평가 지표 선택 이유**:
-- **AutoML 사용 여부와 목적**:
-- **주요 실험 요약**:
-- **최종 모델 선택 이유**:
-
-| model_id | data_version | 주요 변경점 | metric | 한계 |
-|----------|--------------|-------------|--------|------|
-|          |              |             |        |      |
-
-자세한 실험 로그는 `experiments/runs/`와 `model_registry.json`을 확인합니다.
-Streamlit에서 볼 confusion matrix는 각 run의 `confusion_matrix.json`을 사용합니다.
-AutoGluon을 실행했다면 `leaderboard.csv`와 `automl_summary.json`을 함께 확인합니다.
-모델링 기준은 `docs/specs/MODELING_SPEC.md`를 따릅니다.
-
----
-
-## 5. 결과 검토와 재모델링
-
-- **오류 유형**:
-- **개선한 부분**:
-- **개선되지 않은 부분**:
-- **다음에 시도할 것**:
-
-자세한 내용은 `reports/ERROR_ANALYSIS.md`와 `reports/EXPERIMENT_REPORT.md`에 기록합니다.
-metric 해석과 모델 비교 기준은 `docs/specs/METRICS_AND_INTERPRETATION_SPEC.md`를 따릅니다.
-
----
-
-## 6. 버전 관리
-
-- **데이터 버전 기록**: `data_manifest.json`
-- **모델 버전 기록**: `model_registry.json`
-- **실험 산출물**: `experiments/runs/<run_id>/`
-- **큰 파일 보관 위치**: [Google Drive / Hugging Face Hub / Kaggle / 기타 링크]
-
-큰 원본 데이터, 가공 데이터, 모델 가중치는 Git에 직접 올리지 않습니다.
-작업 단계가 끝나면 `/checkpoint [메시지]`로 `*.md`, 코드, `data_manifest.json`, `model_registry.json` 같은 가벼운 기록 파일만 검토 후 commit합니다.
-Claude Code와 협업할 때의 공통 기준은 `CLAUDE.md`를 확인합니다.
-
----
-
-## 7. Streamlit 시각화와 모니터링
-
-- **데모 방식**: Streamlit Community Cloud / 로컬 실행 / 기타
-- **데모 URL**:
-- **기록하는 로그**: `logs/inference.jsonl`
-- **실험 대시보드**: Overview, Leaderboard, Evaluation, Prediction, Logs
-- **AutoML 대시보드**: `leaderboard.csv`, `automl_summary.json`, validation/test metric
-- **Threshold 대시보드**: binary classification에서 `threshold_metrics.csv`가 있을 때 precision/recall/F1 확인
-- **Local explanation**: AutoGluon 내부 모델 2개에 같은 입력 row를 요청하고 SHAP으로 응답 이유 후보 비교
-- **로그 대시보드**: 요청 수, error rate, 평균/P95 latency, 최근 추론 로그
-- **운영 한계**:
-
----
-
-## 8. 결과 및 한계
-
-- **최종 결과**:
-- **잘 된 점**:
-- **한계**:
-- **개선 방향**:
-
----
-
-## 9. 자연어로 추가 검토 요청하기
-
-정해진 산출물을 만들 때는 slash command를 우선 사용합니다.
-판단과 해석이 필요한 질문은 아래처럼 자연어로 요청하면 좋습니다.
+정해진 단계는 slash command로 진행하고, 판단이 필요한 부분은 자연어로 물어보면 좋습니다.
 
 ```markdown
-이 데이터셋의 컬럼 설명, 결측치/이상치 요약, target 분포를 바탕으로
-추가로 확인해야 할 EDA 질문 10개를 제안해주세요.
-데이터 누수 가능성이 있는 컬럼도 따로 의심 목록으로 정리해주세요.
+이 drop 후보 중 어떤 컬럼을 유지하거나 제거하는 게 좋을지,
+데이터 누수 위험과 모델 해석 관점에서 비교해주세요.
 ```
 
 ```markdown
-현재 문제 정의와 EDA 결과를 바탕으로 feature engineering 후보를 제안해주세요.
-각 feature마다 기대 효과, 데이터 누수 위험, 구현 난이도를 표로 정리해주세요.
+현재 문제 정의에서 accuracy와 macro_f1 중 어떤 metric이 더 적절한지 설명해주세요.
 ```
 
 ```markdown
-아래 실험 결과에서 metric이 실제 문제 정의와 잘 맞는지 검토해주세요.
-accuracy만 볼 때 놓칠 수 있는 위험과 추가로 봐야 할 지표를 제안해주세요.
+AutoML 결과가 baseline보다 좋아 보이는데, 실제로 채택해도 되는지
+validation/test 차이와 auxiliary metric 기준으로 검토해주세요.
 ```
-
-```markdown
-오답 샘플과 예측 확률을 보고 실패 유형을 묶어주세요.
-각 유형별 원인 가설과 다음 실험 아이디어를 제안해주세요.
-```
-
-AI가 만든 해석은 실제 데이터 분포, split, metric, 중복/누수 계산으로 다시 확인합니다.
