@@ -70,6 +70,7 @@ $ARGUMENTS
 ## 4단계: Data Card 반영 요약
 
 `reports/DATA_CARD.md`에 옮길 수 있게 다음 형식으로 요약하세요.
+전처리 결정은 반드시 `pipeline_decisions` YAML block에도 반영할 수 있는 형태로 정리합니다.
 
 ```markdown
 ## DATA_CARD 업데이트 초안
@@ -87,6 +88,7 @@ $ARGUMENTS
 - 누수 의심 컬럼:
 - split 방식 추천:
 - 전처리 후보:
+- pipeline_decisions 수정 후보:
 ```
 
 ---

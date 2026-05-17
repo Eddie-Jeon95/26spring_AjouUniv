@@ -113,7 +113,7 @@ logs/                 # 추론 로그, Git 제외
 - 데이터가 바뀌면 `data_manifest.json`의 `data_version`, row/column 수, split, checksum을 갱신합니다.
 - train/validation/test split 이후에는 test 데이터를 전처리 fit이나 모델 선택에 사용하지 않습니다.
 - leakage가 의심되면 모델 성능 개선보다 누수 확인을 먼저 합니다.
-- 학생에게 YAML 직접 수정을 요구하지 않습니다. raw 파일명, target, output, data_version은 대화나 slash command 인자로 받습니다.
+- 학생에게 `configs/default.yaml` 같은 설정 파일 직접 수정을 요구하지 않습니다. raw 파일명, target, output, data_version은 `reports/DATA_CARD.md`의 `pipeline_decisions` block에 기록하고, CLI 인자는 임시 override로만 사용합니다.
 - EDA는 바로 실행하기보다 먼저 확인할 질문과 표/그래프를 짧게 계획한 뒤 notebook을 만들고 실행합니다.
 - `reports/DATA_CARD.md`는 EDA 이후에 데이터 품질, 누수 위험, 전처리 결정을 정리하는 산출물입니다.
 - EDA에서는 constant, near-constant, high-missing, ID-like, high-correlation feature를 점검하고 drop 후보와 근거를 Data Card에 남깁니다.
@@ -126,9 +126,9 @@ logs/                 # 추론 로그, Git 제외
 - 복잡한 모델보다 단순한 baseline을 먼저 만듭니다.
 - 새 실험은 반드시 가설, 변경점, 비교 baseline, 성공/실패 기준을 가집니다.
 - config, metric, prediction sample, artifact path가 재현 가능하게 남아야 합니다.
-- 실제 프로젝트 baseline은 `python scripts/train.py --data ... --target ... --data-version ...` 형태의 CLI 인자를 우선 사용합니다.
-- task type, positive class, primary metric, auxiliary metrics를 먼저 정하고 CLI 인자로 명시합니다.
-- Data Card의 split 추천을 맞출 때는 YAML을 수정하지 말고 `--test-size`, `--val-size`, `--no-stratify` CLI 인자를 우선 사용합니다.
+- 실제 프로젝트 baseline은 `reports/EXPERIMENT_REPORT.md`의 `training_decisions` block을 채운 뒤 `python scripts/train.py --decisions reports/EXPERIMENT_REPORT.md` 실행을 우선 사용합니다.
+- task type, positive class, primary metric, auxiliary metrics를 먼저 정하고 `training_decisions` block에 남깁니다.
+- Data Card의 split 추천을 맞출 때는 YAML을 수정하지 말고 `training_decisions.split`에 기록합니다.
 - 실행에 사용된 effective config는 각 run의 `experiments/runs/<run_id>/config.yaml`에 자동 저장합니다.
 - `predictions.csv`에 feature와 `original_index`가 있으면 오류 분석에 사용합니다. 없으면 feature 값을 추측하지 말고 config와 seed로 split을 재현하거나 한계를 명시합니다.
 - 실험별 `confusion_matrix.json`을 남겨 Streamlit에서 모델별 오류 패턴을 확인할 수 있어야 합니다.

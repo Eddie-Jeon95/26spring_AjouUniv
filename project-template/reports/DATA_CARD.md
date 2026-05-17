@@ -60,6 +60,29 @@
 - processed에 반영하지 않고 train pipeline에 남긴 변환:
 - 전처리 후 row / column 수:
 
+### Pipeline Decisions
+
+아래 YAML block은 `python scripts/preprocess.py --decisions reports/DATA_CARD.md` 실행 시 자동 적용됩니다.
+자유 서술이나 표는 기록용이고, 실제 실행 설정은 이 block만 사용합니다.
+
+```yaml pipeline_decisions
+input: ""
+output: ""
+target: ""
+data_version: ""
+sep: ","
+header: infer
+columns: []
+drop_columns: []
+rename: {}
+target_map: {}
+drop_duplicate_rows: false
+keep_rows_missing_target: false
+manifest: data_manifest.json
+source: ""
+notes: ""
+```
+
 ## 7. Split과 버전 기록
 
 - data_version:

@@ -16,8 +16,10 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from decision_blocks import load_decision_block
 from train import (
     append_model_registry,
+    apply_training_decisions,
     evaluate,
     infer_positive_label,
     load_config,
@@ -30,6 +32,7 @@ from train import (
     split_dataset,
     stable_hash,
     threshold_rows,
+    validate_training_decisions,
     validate_primary_metric,
     write_confusion_matrix,
     write_json,
@@ -186,6 +189,10 @@ def main(config_path: str, args: argparse.Namespace | None = None) -> dict[str, 
         ) from exc
 
     config = load_config(config_path)
+    if args is not None and getattr(args, "decisions", None):
+        decisions = load_decision_block(args.decisions, "training_decisions")
+        validate_training_decisions(decisions, args)
+        config = apply_training_decisions(config, decisions)
     if args is not None:
         config = apply_cli_overrides(config, args)
 
@@ -364,6 +371,7 @@ def main(config_path: str, args: argparse.Namespace | None = None) -> dict[str, 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=str, default="configs/default.yaml")
+    parser.add_argument("--decisions", type=str, default=None, help="training_decisions YAML block이 있는 Markdown 파일")
     parser.add_argument("--data", type=str, default=None, help="학습용 processed CSV 경로")
     parser.add_argument("--target", type=str, default=None, help="target column 이름")
     parser.add_argument("--data-version", type=str, default=None, help="실험에 사용할 data_version")

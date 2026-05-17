@@ -38,7 +38,10 @@ $ARGUMENTS
 
 ## 3단계: AutoML Plan 작성
 
-`reports/EXPERIMENT_REPORT.md`의 `AutoML Plan` 섹션에 옮길 수 있게 아래를 정리합니다.
+`reports/EXPERIMENT_REPORT.md`의 `training_decisions` YAML block을 우선 확인하고,
+AutoML이 사용할 metric, split, `automl.time_limit`, `automl.presets`를 block에 반영합니다.
+
+`AutoML Plan` 섹션에 옮길 수 있게 아래를 정리합니다.
 
 ```markdown
 ## AutoML Plan
@@ -64,32 +67,16 @@ $ARGUMENTS
 
 ## 4단계: 실행 명령 제안
 
-YAML 직접 수정보다 CLI 인자를 우선합니다.
+기본 실행은 MD decision block을 사용합니다.
 
 ```bash
-python scripts/train_automl.py \
-  --data data/processed/[processed_file] \
-  --target [target] \
-  --data-version [data_version] \
-  --task-type classification \
-  --primary-metric macro_f1 \
-  --metrics accuracy,precision_macro,recall_macro \
-  --test-size 0.2 \
-  --val-size 0.2 \
-  --time-limit 300 \
-  --presets medium_quality
+python scripts/train_automl.py --decisions reports/EXPERIMENT_REPORT.md
 ```
 
-regression이면 예를 들어 아래처럼 실행합니다.
+임시 override가 필요할 때만 CLI 인자를 함께 넘깁니다.
 
 ```bash
-python scripts/train_automl.py \
-  --data data/processed/[processed_file] \
-  --target [target] \
-  --data-version [data_version] \
-  --task-type regression \
-  --primary-metric rmse \
-  --metrics mae,rmse,r2
+python scripts/train_automl.py --decisions reports/EXPERIMENT_REPORT.md --time-limit 600
 ```
 
 ## 5단계: 실행 후 확인 항목

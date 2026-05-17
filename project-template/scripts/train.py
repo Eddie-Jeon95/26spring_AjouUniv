@@ -47,6 +47,8 @@ from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
+from decision_blocks import load_decision_block
+
 
 CLASSIFICATION_METRICS = {
     "accuracy",
@@ -95,6 +97,170 @@ def task_type_from_config(config: dict[str, Any]) -> str:
     return task_type
 
 
+def parse_model_params(value: str | dict[str, Any] | None) -> dict[str, Any]:
+    if value is None:
+        return {}
+    if isinstance(value, dict):
+        return dict(value)
+
+    params: dict[str, Any] = {}
+    for pair in value.split(","):
+        pair = pair.strip()
+        if "=" not in pair:
+            continue
+        key, raw_value = pair.split("=", 1)
+        key = key.strip()
+        raw_value = raw_value.strip()
+        try:
+            params[key] = int(raw_value)
+        except ValueError:
+            try:
+                params[key] = float(raw_value)
+            except ValueError:
+                params[key] = None if raw_value == "None" else raw_value
+    return params
+
+
+def parse_bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    lowered = str(value).strip().lower()
+    if lowered in {"1", "true", "yes", "y"}:
+        return True
+    if lowered in {"0", "false", "no", "n"}:
+        return False
+    raise ValueError(f"boolean 값으로 해석할 수 없습니다: {value}")
+
+
+def has_value(value: Any) -> bool:
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return bool(value.strip())
+    return True
+
+
+def validate_training_decisions(decisions: dict[str, Any], args: argparse.Namespace) -> None:
+    data_value = decisions.get("data")
+    data_path = data_value.get("path") if isinstance(data_value, dict) else data_value
+    target = data_value.get("target") if isinstance(data_value, dict) else None
+    data_version = data_value.get("data_version") if isinstance(data_value, dict) else None
+
+    data_path = args.data if has_value(getattr(args, "data", None)) else data_path
+    target = args.target if has_value(getattr(args, "target", None)) else decisions.get("target", target)
+    data_version = (
+        args.data_version
+        if has_value(getattr(args, "data_version", None))
+        else decisions.get("data_version", data_version)
+    )
+
+    missing = [
+        name
+        for name, value in {
+            "data": data_path,
+            "target": target,
+            "data_version": data_version,
+        }.items()
+        if not has_value(value)
+    ]
+    if missing:
+        raise ValueError(
+            f"{args.decisions}의 training_decisions block 또는 CLI 인자에서 필수값이 비어 있습니다: {missing}"
+        )
+
+
+def apply_training_decisions(config: dict[str, Any], decisions: dict[str, Any]) -> dict[str, Any]:
+    """Apply Markdown training_decisions before CLI overrides."""
+    if not decisions:
+        return config
+
+    config = dict(config)
+    data_config = dict(config.get("data", {}))
+    split_config = dict(data_config.get("split", {}))
+    tracking_config = dict(config.get("tracking", {}))
+    task = dict(config.get("task", {}))
+    model_config = dict(config.get("model", {}))
+    automl_config = dict(config.get("automl", {}))
+
+    data_value = decisions.get("data")
+    if isinstance(data_value, dict):
+        if data_value.get("path"):
+            data_config["path"] = data_value["path"]
+            data_config["source"] = data_value["path"]
+            data_config["allow_demo_fallback"] = False
+        if data_value.get("target"):
+            data_config["target_column"] = data_value["target"]
+        if data_value.get("data_version"):
+            data_config["data_version"] = data_value["data_version"]
+    elif data_value:
+        data_config["path"] = data_value
+        data_config["source"] = data_value
+        data_config["allow_demo_fallback"] = False
+
+    if decisions.get("target"):
+        data_config["target_column"] = decisions["target"]
+    if decisions.get("data_version"):
+        data_config["data_version"] = decisions["data_version"]
+    if decisions.get("task_type"):
+        task_type = str(decisions["task_type"]).strip().lower()
+        task["type"] = task_type
+        model_config["task"] = task_type
+        if task_type == "regression" and model_config.get("name") == "logistic_regression":
+            model_config["name"] = "linear_regression"
+            model_config["params"] = {}
+    if "positive_class" in decisions:
+        task["positive_class"] = decisions["positive_class"]
+    if decisions.get("primary_metric"):
+        tracking_config["primary_metric"] = decisions["primary_metric"]
+    if decisions.get("metrics") is not None:
+        tracking_config["auxiliary_metrics"] = parse_csv_list(decisions.get("metrics"))
+    if decisions.get("auxiliary_metrics") is not None:
+        tracking_config["auxiliary_metrics"] = parse_csv_list(decisions.get("auxiliary_metrics"))
+
+    split_decisions = decisions.get("split") or {}
+    if not isinstance(split_decisions, dict):
+        raise ValueError("training_decisions.split은 YAML object 형태여야 합니다.")
+    for key in ("test_size", "val_size", "stratify"):
+        if key in split_decisions and split_decisions[key] is not None:
+            split_config[key] = parse_bool(split_decisions[key]) if key == "stratify" else split_decisions[key]
+    for key in ("test_size", "val_size"):
+        if key in decisions and decisions[key] is not None:
+            split_config[key] = decisions[key]
+    if "stratify" in decisions and decisions["stratify"] is not None:
+        split_config["stratify"] = parse_bool(decisions["stratify"])
+
+    baseline_decisions = decisions.get("baseline") or {}
+    if not isinstance(baseline_decisions, dict):
+        raise ValueError("training_decisions.baseline은 YAML object 형태여야 합니다.")
+    if decisions.get("experiment_name"):
+        config["experiment_name"] = decisions["experiment_name"]
+    if baseline_decisions.get("experiment_name"):
+        config["experiment_name"] = baseline_decisions["experiment_name"]
+    model_name = baseline_decisions.get("model_name") or decisions.get("model_name")
+    if model_name:
+        if model_config.get("name") != model_name:
+            model_config["params"] = {}
+        model_config["name"] = model_name
+    model_params = baseline_decisions.get("model_params", decisions.get("model_params"))
+    if model_params is not None:
+        model_config["params"] = parse_model_params(model_params)
+
+    automl_decisions = decisions.get("automl") or {}
+    if not isinstance(automl_decisions, dict):
+        raise ValueError("training_decisions.automl은 YAML object 형태여야 합니다.")
+    for key in ("time_limit", "presets"):
+        if key in automl_decisions and automl_decisions[key] is not None:
+            automl_config[key] = automl_decisions[key]
+
+    data_config["split"] = split_config
+    config["data"] = data_config
+    config["tracking"] = tracking_config
+    config["task"] = task
+    config["model"] = model_config
+    config["automl"] = automl_config
+    return config
+
+
 def apply_cli_overrides(config: dict[str, Any], args: argparse.Namespace) -> dict[str, Any]:
     """학생이 YAML 대신 CLI로 넘긴 값을 effective config에 반영한다."""
     config = dict(config)
@@ -136,19 +302,8 @@ def apply_cli_overrides(config: dict[str, Any], args: argparse.Namespace) -> dic
     if args.model_params:
         model_config = dict(config.get("model", {}))
         existing = dict(model_config.get("params", {}))
-        for pair in args.model_params.split(","):
-            pair = pair.strip()
-            if "=" not in pair:
-                continue
-            k, v = pair.split("=", 1)
-            k = k.strip()
-            try:
-                existing[k] = int(v)
-            except ValueError:
-                try:
-                    existing[k] = float(v)
-                except ValueError:
-                    existing[k] = None if v.strip() == "None" else v.strip()
+        for k, v in parse_model_params(args.model_params).items():
+            existing[k] = v
         model_config["params"] = existing
         config["model"] = model_config
     if args.test_size is not None:
@@ -694,6 +849,10 @@ def class_labels(model: Any, y: pd.Series) -> list[Any]:
 
 def main(config_path: str, args: argparse.Namespace | None = None) -> dict[str, Any]:
     config = load_config(config_path)
+    if args is not None and getattr(args, "decisions", None):
+        decisions = load_decision_block(args.decisions, "training_decisions")
+        validate_training_decisions(decisions, args)
+        config = apply_training_decisions(config, decisions)
     if args is not None:
         config = apply_cli_overrides(config, args)
     seed = int(config.get("seed", 42))
@@ -830,6 +989,7 @@ def main(config_path: str, args: argparse.Namespace | None = None) -> dict[str, 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=str, default="configs/default.yaml")
+    parser.add_argument("--decisions", type=str, default=None, help="training_decisions YAML block이 있는 Markdown 파일")
     parser.add_argument("--data", type=str, default=None, help="학습용 processed CSV 경로")
     parser.add_argument("--target", type=str, default=None, help="target column 이름")
     parser.add_argument("--data-version", type=str, default=None, help="실험에 사용할 data_version")

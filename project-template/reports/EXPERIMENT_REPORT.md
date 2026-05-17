@@ -18,7 +18,38 @@
 - **실행 명령**:
 
 ```bash
-python scripts/train.py --data data/processed/[file].csv --target [target] --data-version [version]
+python scripts/train.py --decisions reports/EXPERIMENT_REPORT.md
+```
+
+### Training Decisions
+
+아래 YAML block은 `python scripts/train.py --decisions reports/EXPERIMENT_REPORT.md`와
+`python scripts/train_automl.py --decisions reports/EXPERIMENT_REPORT.md` 실행 시 자동 적용됩니다.
+CLI 인자를 함께 넘기면 CLI 값이 이 block보다 우선합니다.
+
+```yaml training_decisions
+data: ""
+target: ""
+data_version: ""
+task_type: classification
+positive_class: null
+primary_metric: accuracy
+metrics:
+  - macro_f1
+  - precision_macro
+  - recall_macro
+split:
+  test_size: 0.2
+  val_size: 0.1
+  stratify: true
+baseline:
+  experiment_name: baseline
+  model_name: logistic_regression
+  model_params:
+    max_iter: 1000
+automl:
+  time_limit: 300
+  presets: medium_quality
 ```
 
 ## 2. Baseline Result
@@ -46,7 +77,7 @@ python scripts/train.py --data data/processed/[file].csv --target [target] --dat
 - **실행 명령**:
 
 ```bash
-python scripts/train_automl.py --data data/processed/[file].csv --target [target] --data-version [version]
+python scripts/train_automl.py --decisions reports/EXPERIMENT_REPORT.md
 ```
 
 ## 4. AutoML Result

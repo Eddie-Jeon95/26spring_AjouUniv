@@ -95,8 +95,8 @@
 
 - [ ] `CLAUDE.md`의 Claude Code 작업 기준을 확인했는가?
 - [ ] `.python-version`과 실제 가상환경의 Python 버전이 맞는가?
-- [ ] `python scripts/train.py --data ... --target ... --data-version ...` 실행 흐름이 유지되는가?
-- [ ] AutoGluon 사용 시 `python scripts/train_automl.py --data ... --target ... --data-version ...` 실행 흐름이 유지되는가?
+- [ ] `python scripts/train.py --decisions reports/EXPERIMENT_REPORT.md` 실행 흐름이 유지되는가?
+- [ ] AutoGluon 사용 시 `python scripts/train_automl.py --decisions reports/EXPERIMENT_REPORT.md` 실행 흐름이 유지되는가?
 - [ ] baseline과 AutoGluon이 같은 processed CSV, target, split, seed, metric을 사용했는가?
 - [ ] seed, config, data_version, model_id가 실험마다 남는가?
 - [ ] 큰 데이터와 모델 파일은 Git에 올리지 않고 외부 링크나 경로만 기록했는가?

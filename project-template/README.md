@@ -124,67 +124,42 @@ EDA 후 `reports/DATA_CARD.md`에 반드시 기록합니다.
 - split 방식과 seed
 - processed 파일에 반영할 전처리 결정
 
+특히 `reports/DATA_CARD.md`의 `pipeline_decisions` YAML block에 전처리 결정을 적어두면,
+다음 전처리 단계에서 긴 CLI 인자 대신 이 block을 자동 적용할 수 있습니다.
+
 ### 0-9. 전처리 실행
 
 전처리는 raw 데이터를 학습 가능한 processed CSV로 정돈하는 단계입니다.
 
-```bash
-python scripts/preprocess.py \
-  --input data/raw/[raw_file] \
-  --output data/processed/[processed_file].csv \
-  --target [target] \
-  --data-version [data_version] \
-  --drop-columns [leakage_or_id_columns]
-```
-
-제거할 컬럼이 없으면 `--drop-columns` 줄은 빼고 실행합니다.
-`--drop-columns`는 EDA와 `reports/DATA_CARD.md`에 근거를 남긴 leakage, ID-like, constant, high-missing, high-correlation 후보를 반영할 때 사용합니다.
-
-header가 없는 파일이면 아래처럼 컬럼명을 지정합니다.
+권장 흐름은 `reports/DATA_CARD.md`의 `pipeline_decisions` block을 먼저 수정한 뒤 아래처럼 실행하는 것입니다.
 
 ```bash
-python scripts/preprocess.py \
-  --input data/raw/[raw_file] \
-  --output data/processed/[processed_file].csv \
-  --target [target] \
-  --sep "," \
-  --header none \
-  --columns col1,col2,col3,target \
-  --data-version [data_version]
+python scripts/preprocess.py --decisions reports/DATA_CARD.md
 ```
+
+CLI 인자를 함께 넘기면 CLI 값이 MD block보다 우선합니다.
+예를 들어 임시로 drop column만 바꿔 실행할 때는 아래처럼 덮어쓸 수 있습니다.
+
+```bash
+python scripts/preprocess.py --decisions reports/DATA_CARD.md --drop-columns [leakage_or_id_columns]
+```
+
+`drop_columns`는 EDA와 `reports/DATA_CARD.md`에 근거를 남긴 leakage, ID-like, constant, high-missing, high-correlation 후보를 반영할 때 사용합니다.
+`header`가 없는 파일이면 `pipeline_decisions` block의 `header: none`과 `columns: [...]`를 채운 뒤 같은 명령을 실행합니다.
 
 `scaler`, `encoder`, `imputer`처럼 train 데이터에 fit해야 하는 변환은 여기서 하지 않고 학습 pipeline에 남깁니다.
 
 ### 0-10. Baseline 학습
 
-classification 예시:
+먼저 `reports/EXPERIMENT_REPORT.md`의 `training_decisions` block에 processed 데이터, target, task type, metric, split, baseline 모델을 적습니다.
+
+classification 실행:
 
 ```bash
-python scripts/train.py \
-  --data data/processed/[processed_file].csv \
-  --target [target] \
-  --data-version [data_version] \
-  --task-type classification \
-  --positive-class 1 \
-  --primary-metric macro_f1 \
-  --metrics accuracy,precision_macro,recall_macro,roc_auc,pr_auc \
-  --test-size 0.2 \
-  --val-size 0.2
+python scripts/train.py --decisions reports/EXPERIMENT_REPORT.md
 ```
 
-regression 예시:
-
-```bash
-python scripts/train.py \
-  --data data/processed/[processed_file].csv \
-  --target [target] \
-  --data-version [data_version] \
-  --task-type regression \
-  --primary-metric rmse \
-  --metrics mae,r2 \
-  --test-size 0.2 \
-  --val-size 0.2
-```
+regression이면 `training_decisions` block에서 `task_type: regression`, `primary_metric: rmse`, `metrics: [mae, r2]`, `baseline.model_name: linear_regression`처럼 바꾼 뒤 같은 명령을 실행합니다.
 
 학습 후 아래 산출물을 확인합니다.
 
@@ -217,38 +192,13 @@ Claude Code를 사용한다면 아래 커맨드로 결과를 검토합니다.
 AutoGluon은 baseline 이후 같은 processed CSV, target, split, metric 조건에서 pipeline 후보를 비교하는 단계입니다.
 실행 전에 leakage 제외 컬럼이 processed CSV에서 빠졌는지, `data_version`이 baseline과 같은지 확인합니다.
 
-classification 예시:
+classification 실행:
 
 ```bash
-python scripts/train_automl.py \
-  --data data/processed/[processed_file].csv \
-  --target [target] \
-  --data-version [data_version] \
-  --task-type classification \
-  --positive-class 1 \
-  --primary-metric macro_f1 \
-  --metrics accuracy,precision_macro,recall_macro,roc_auc,pr_auc \
-  --test-size 0.2 \
-  --val-size 0.2 \
-  --time-limit 300 \
-  --presets medium_quality
+python scripts/train_automl.py --decisions reports/EXPERIMENT_REPORT.md
 ```
 
-regression 예시:
-
-```bash
-python scripts/train_automl.py \
-  --data data/processed/[processed_file].csv \
-  --target [target] \
-  --data-version [data_version] \
-  --task-type regression \
-  --primary-metric rmse \
-  --metrics mae,r2 \
-  --test-size 0.2 \
-  --val-size 0.2 \
-  --time-limit 300 \
-  --presets medium_quality
-```
+regression도 같은 `training_decisions` block을 사용합니다. AutoML 예산은 `automl.time_limit`, 품질/속도 설정은 `automl.presets`에서 조정합니다.
 
 AutoGluon 실행 후 아래 산출물을 확인합니다.
 

@@ -29,7 +29,10 @@ $ARGUMENTS
 
 ## 2단계: 전처리 결정 정리
 
-실행 전에 다음을 짧게 정리하세요.
+실행 전에 `reports/DATA_CARD.md`의 `pipeline_decisions` YAML block을 우선 확인하고, 필요한 값을 채우거나 수정하세요.
+학생이 직접 선택해야 하는 항목은 후보와 근거를 보여준 뒤 결정값을 block에 반영합니다.
+
+다음 내용을 짧게 정리하세요.
 
 ```markdown
 ## Preprocess Decisions
@@ -49,12 +52,17 @@ $ARGUMENTS
 
 ## 3단계: preprocess 실행
 
-`scripts/preprocess.py`를 CLI 인자로 실행합니다.
+기본 실행은 MD decision block을 사용합니다.
 
-예:
+```bash
+python scripts/preprocess.py --decisions reports/DATA_CARD.md
+```
+
+CLI 인자는 임시 override가 필요할 때만 추가합니다.
 
 ```bash
 python scripts/preprocess.py \
+  --decisions reports/DATA_CARD.md \
   --input data/raw/[raw_file] \
   --output data/processed/[processed_file] \
   --target [target] \
@@ -79,7 +87,7 @@ python scripts/preprocess.py \
 - 다음 baseline 명령을 제안
 
 ```bash
-python scripts/train.py --data data/processed/[processed_file] --target [target] --data-version [data_version]
+python scripts/train.py --decisions reports/EXPERIMENT_REPORT.md
 ```
 
 ---

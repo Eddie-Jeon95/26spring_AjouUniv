@@ -23,6 +23,8 @@ from typing import Any
 
 import pandas as pd
 
+from decision_blocks import load_decision_block
+
 
 def file_sha256(path: Path) -> str:
     """파일 checksum을 계산한다."""
@@ -33,15 +35,24 @@ def file_sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def parse_csv_list(value: str | None) -> list[str] | None:
-    if value is None or value.strip() == "":
+def parse_csv_list(value: str | list[str] | tuple[str, ...] | None) -> list[str] | None:
+    if value is None:
+        return None
+    if isinstance(value, (list, tuple)):
+        parsed = [str(item).strip() for item in value if str(item).strip()]
+        return parsed or None
+    if value.strip() == "":
         return None
     return [item.strip() for item in value.split(",") if item.strip()]
 
 
-def parse_mapping(value: str | None) -> dict[str, str]:
+def parse_mapping(value: str | dict[str, Any] | None) -> dict[str, str]:
     mapping: dict[str, str] = {}
-    if value is None or value.strip() == "":
+    if value is None:
+        return mapping
+    if isinstance(value, dict):
+        return {str(key).strip(): str(mapped_value).strip() for key, mapped_value in value.items()}
+    if value.strip() == "":
         return mapping
     for item in value.split(","):
         if not item.strip():
@@ -51,6 +62,19 @@ def parse_mapping(value: str | None) -> dict[str, str]:
         key, mapped_value = item.split("=", 1)
         mapping[key.strip()] = mapped_value.strip()
     return mapping
+
+
+def parse_bool(value: Any, default: bool = False) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    lowered = str(value).strip().lower()
+    if lowered in {"1", "true", "yes", "y"}:
+        return True
+    if lowered in {"0", "false", "no", "n"}:
+        return False
+    raise ValueError(f"boolean 값으로 해석할 수 없습니다: {value}")
 
 
 def read_json(path: Path, default: Any) -> Any:
@@ -72,6 +96,45 @@ def update_data_manifest(path: Path, record: dict[str, Any]) -> None:
     datasets = manifest.setdefault("datasets", [])
     datasets.append(record)
     write_json(path, manifest)
+
+
+def apply_decision_defaults(args: argparse.Namespace) -> argparse.Namespace:
+    decisions = load_decision_block(args.decisions, "pipeline_decisions") if args.decisions else {}
+    key_map = {
+        "input": "input",
+        "output": "output",
+        "target": "target",
+        "data_version": "data_version",
+        "sep": "sep",
+        "header": "header",
+        "columns": "columns",
+        "drop_columns": "drop_columns",
+        "rename": "rename",
+        "target_map": "target_map",
+        "drop_duplicate_rows": "drop_duplicate_rows",
+        "keep_duplicate_rows": "keep_duplicate_rows",
+        "keep_rows_missing_target": "keep_rows_missing_target",
+        "manifest": "manifest",
+        "source": "source",
+        "notes": "notes",
+    }
+    for attr, key in key_map.items():
+        if getattr(args, attr, None) is None and key in decisions:
+            setattr(args, attr, decisions[key])
+
+    args.sep = args.sep or ","
+    args.header = args.header or "infer"
+    args.drop_duplicate_rows = parse_bool(args.drop_duplicate_rows)
+    args.keep_duplicate_rows = parse_bool(args.keep_duplicate_rows)
+    args.keep_rows_missing_target = parse_bool(args.keep_rows_missing_target)
+    args.manifest = args.manifest or "data_manifest.json"
+    args.notes = args.notes or ""
+
+    missing = [name for name in ("input", "output", "target") if not getattr(args, name, None)]
+    if missing:
+        source = f"{args.decisions}의 pipeline_decisions block 또는 CLI 인자" if args.decisions else "CLI 인자"
+        raise ValueError(f"{source}에서 필수값이 비어 있습니다: {missing}")
+    return args
 
 
 def load_raw_csv(
@@ -179,26 +242,33 @@ def preprocess(args: argparse.Namespace) -> dict[str, Any]:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Raw 데이터를 학습용 processed CSV로 정리합니다.")
-    parser.add_argument("--input", required=True, help="raw CSV/TXT/TSV 파일 경로")
-    parser.add_argument("--output", required=True, help="저장할 processed CSV 경로")
-    parser.add_argument("--target", required=True, help="target column 이름")
+    parser.add_argument("--decisions", default=None, help="pipeline_decisions YAML block이 있는 Markdown 파일")
+    parser.add_argument("--input", default=None, help="raw CSV/TXT/TSV 파일 경로")
+    parser.add_argument("--output", default=None, help="저장할 processed CSV 경로")
+    parser.add_argument("--target", default=None, help="target column 이름")
     parser.add_argument("--data-version", default=None, help="data_manifest.json에 기록할 데이터 버전")
-    parser.add_argument("--sep", default=",", help="pandas.read_csv separator")
-    parser.add_argument("--header", choices=["infer", "none"], default="infer", help="header가 없으면 none")
+    parser.add_argument("--sep", default=None, help="pandas.read_csv separator")
+    parser.add_argument("--header", choices=["infer", "none"], default=None, help="header가 없으면 none")
     parser.add_argument("--columns", default=None, help="header가 없거나 컬럼명을 덮어쓸 때 col1,col2 형식")
     parser.add_argument("--drop-columns", default=None, help="제거할 컬럼 목록: col1,col2")
     parser.add_argument("--rename", default=None, help="컬럼명 변경: old=new,old2=new2")
     parser.add_argument("--target-map", default=None, help="target 값 mapping: old=new,old2=new2")
-    parser.add_argument("--drop-duplicate-rows", action="store_true", help="exact duplicate row를 제거함")
+    parser.add_argument("--drop-duplicate-rows", action="store_true", default=None, help="exact duplicate row를 제거함")
     parser.add_argument(
         "--keep-duplicate-rows",
         action="store_true",
+        default=None,
         help="호환용 옵션입니다. 기본 동작이 중복 row 보존입니다.",
     )
-    parser.add_argument("--keep-rows-missing-target", action="store_true", help="target 결측 row를 제거하지 않음")
-    parser.add_argument("--manifest", default="data_manifest.json", help="갱신할 data manifest 경로")
+    parser.add_argument(
+        "--keep-rows-missing-target",
+        action="store_true",
+        default=None,
+        help="target 결측 row를 제거하지 않음",
+    )
+    parser.add_argument("--manifest", default=None, help="갱신할 data manifest 경로")
     parser.add_argument("--source", default=None, help="데이터 출처 메모")
-    parser.add_argument("--notes", default="", help="전처리 메모")
+    parser.add_argument("--notes", default=None, help="전처리 메모")
     return parser
 
 
@@ -206,6 +276,7 @@ def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
     try:
+        args = apply_decision_defaults(args)
         record = preprocess(args)
     except (FileNotFoundError, ValueError) as exc:
         parser.exit(1, f"error: {exc}\n")

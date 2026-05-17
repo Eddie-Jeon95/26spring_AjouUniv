@@ -32,12 +32,15 @@ $ARGUMENTS
 - classification인지 regression인지 확인
 - binary classification이면 positive class와 threshold 조정 가능 여부 확인
 - `--primary-metric`이 실제 계산 가능한 metric인지 확인
-- `DATA_CARD.md`의 split 추천과 `configs/default.yaml`의 split 기본값이 다르면, 가능한 경우 CLI 인자(`--test-size`, `--val-size`, `--no-stratify`)로 Data Card 추천을 맞춥니다.
-- CLI로 맞출 수 없는 split이면 실행 전에 사용자에게 짧게 확인하고, 그대로 진행한다면 `EXPERIMENT_REPORT.md`에 불일치 이유를 기록합니다.
+- `DATA_CARD.md`의 split 추천과 `training_decisions.split`이 다르면, 실행 전에 학생에게 확인하고 결정값을 `EXPERIMENT_REPORT.md`에 반영합니다.
+- 현재 스크립트로 맞출 수 없는 split이면 실행 전에 사용자에게 짧게 확인하고, 그대로 진행한다면 `EXPERIMENT_REPORT.md`에 불일치 이유를 기록합니다.
 
 ## 2단계: Baseline Plan 정리
 
-학습 전에 `reports/EXPERIMENT_REPORT.md`의 `Baseline Plan` 섹션에 옮길 수 있게 다음을 정리하세요.
+학습 전에 `reports/EXPERIMENT_REPORT.md`의 `training_decisions` YAML block을 우선 확인하고,
+학생이 선택한 processed 데이터, task type, metric, split, baseline 모델을 block에 반영하세요.
+
+`Baseline Plan` 섹션에 옮길 수 있게 다음도 정리하세요.
 
 ```markdown
 ## Baseline Plan
@@ -59,22 +62,14 @@ $ARGUMENTS
 
 ## 3단계: 학습 실행
 
-YAML 직접 수정을 요구하지 말고 CLI 인자로 실행합니다.
+기본 실행은 MD decision block을 사용합니다.
 
 ```bash
-python scripts/train.py \
-  --data data/processed/[processed_file] \
-  --target [target] \
-  --data-version [data_version] \
-  --task-type classification \
-  --primary-metric macro_f1 \
-  --metrics accuracy,precision_macro,recall_macro \
-  --test-size 0.2 \
-  --val-size 0.2
+python scripts/train.py --decisions reports/EXPERIMENT_REPORT.md
 ```
 
-regression이면 예를 들어 `--task-type regression --primary-metric rmse --metrics mae,rmse,r2`를 사용합니다.
-입력 인자에 `test_size=...`, `val_size=...`, `stratify=false`, `task_type=...`, `primary_metric=...`, `positive_class=...`가 있으면 각각 CLI 인자로 변환해 실행합니다.
+임시 override가 필요할 때만 CLI 인자를 함께 넘깁니다.
+예: `--model-name random_forest`, `--primary-metric macro_f1`, `--test-size 0.2`.
 
 ## 4단계: 결과 기록
 
